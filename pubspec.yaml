@@ -24,6 +24,12 @@ flutter:
 
   assets:
     - assets/images/paw.png
+    - assets/images/cattreeColor.png
+    - assets/images/mimiSit.png
+    - assets/images/mimiSleep.png
+    - assets/images/paw.png
+    - assets/images/plumSit.png
+    - assets/images/plumSleep.png
 
   fonts:
     - family: Jersey

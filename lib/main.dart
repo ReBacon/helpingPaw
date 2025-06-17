@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'firebase_options.dart';
+import 'style.dart';
 
-// #region Main App Entry Point
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(MyApp());
 }
 
@@ -15,17 +19,13 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'helpingPaw',
       theme: ThemeData(
-        primarySwatch: Colors.teal,
-        fontFamily: 'Jersey',
+        primarySwatch: Colors.blue,
       ),
-      home: AuthWrapper(), // AuthWrapper prüft den Login-Status
-      debugShowCheckedModeBanner: false,
+      home: AuthWrapper(),
     );
   }
 }
-// #endregion
 
-// #region Authentication Wrapper
 class AuthWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -39,459 +39,196 @@ class AuthWrapper extends StatelessWidget {
         }
 
         if (snapshot.hasData) {
-          // User ist eingeloggt
           return HomeScreen();
         } else {
-          // User ist nicht eingeloggt
           return LoginScreen();
         }
       },
     );
   }
 }
-// #endregion
 
-// #region Login Screen
+//#region LoginScreen
 class LoginScreen extends StatefulWidget {
   @override
   _LoginScreenState createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // #region Controllers und Variablen
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  String _errorMessage = '';
+  bool _themeLoaded = false;
 
-  bool _isLoading = false;
-  String? _errorMessage;
+  @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
 
-  // Farben
-  final Color backgroundColor = Color(0xFFC7F0EC);
-  final Color primaryColor = Color(0xFF40615F);
-  final Color buttonColor = Color(0xFF88D1CA);
-  // #endregion
-
-  // #region Authentication Methods
-  Future<void> _signInWithEmailAndPassword() async {
+  Future<void> _loadTheme() async {
+    await AppTheme.loadTurquoiseTheme();
     setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+      _themeLoaded = true;
     });
+  }
 
+  Future<void> _login() async {
     try {
-      await _auth.signInWithEmailAndPassword(
+      UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
-        password: _passwordController.text,
+        password: _passwordController.text.trim(),
       );
-      // Navigation erfolgt automatisch durch AuthWrapper
-    } on FirebaseAuthException catch (e) {
-      setState(() {
-        switch (e.code) {
-          case 'user-not-found':
-            _errorMessage = 'Benutzer nicht gefunden';
-            break;
-          case 'wrong-password':
-            _errorMessage = 'Falsches Passwort';
-            break;
-          case 'invalid-email':
-            _errorMessage = 'Ungültige E-Mail-Adresse';
-            break;
-          case 'user-disabled':
-            _errorMessage = 'Benutzer wurde deaktiviert';
-            break;
-          case 'too-many-requests':
-            _errorMessage = 'Zu viele Versuche. Bitte warten Sie.';
-            break;
-          default:
-            _errorMessage = 'Anmeldung fehlgeschlagen: ${e.message}';
-        }
-      });
+
+      if (userCredential.user != null) {
+        await AppTheme.loadUserTheme();
+        setState(() {});
+      }
     } catch (e) {
       setState(() {
-        _errorMessage = 'Ein unerwarteter Fehler ist aufgetreten';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
+        _errorMessage = 'Login fehlgeschlagen: ${e.toString()}';
       });
     }
   }
 
-  Future<void> _resetPassword() async {
-    if (_emailController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Bitte geben Sie Ihre E-Mail-Adresse ein'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    try {
-      await _auth.sendPasswordResetEmail(email: _emailController.text.trim());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Passwort-Reset E-Mail wurde gesendet'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Fehler: ${e.message}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  // Eingabe-Validierung
-  bool get _isFormValid {
-    return _emailController.text.trim().isNotEmpty &&
-        _passwordController.text.isNotEmpty &&
-        _emailController.text.contains('@');
-  }
-  // #endregion
-
-  // #region UI Build Method
   @override
   Widget build(BuildContext context) {
+    if (!_themeLoaded) {
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
-      backgroundColor: backgroundColor,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // #region Logo Section
-                SizedBox(height: 30),
-                Column(
-                  children: [
-                    Container(
-                      width: 140,
-                      height: 140,
-                      child: Image.asset(
-                        'assets/images/paw.png',
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            width: 140,
-                            height: 140,
-                            decoration: BoxDecoration(
-                              color: buttonColor,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.pets,
-                              size: 80,
-                              color: primaryColor,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    Text(
-                      'helpingPaw',
-                      style: TextStyle(
-                        fontSize: 60,
-                        color: Color(0xFF1A2B3C),
-                      ),
-                    ),
-                  ],
+      backgroundColor: AppTheme.colors.mainBackground,
+      body: Center(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: ResponsiveHelper.getLogoSize(context),
+                height: ResponsiveHelper.getLogoSize(context),
+                child: Image.asset(
+                  'assets/images/paw.png',
+                  fit: BoxFit.contain,
                 ),
-                // #endregion
-
-                SizedBox(height: 30),
-
-                // #region Error Message
-                if (_errorMessage != null)
-                  Container(
-                    width: double.infinity,
-                    constraints: BoxConstraints(maxWidth: 320),
-                    margin: EdgeInsets.only(bottom: 20),
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red[100],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red),
-                    ),
-                    child: Text(
-                      _errorMessage!,
-                      style: TextStyle(
-                        color: Colors.red[800],
-                        fontSize: 14,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
+              ),
+              Text(
+                'helpingPaw',
+                style: AppStyles.titleStyle(context).copyWith(
+                  color: Color(0xFF1A2C3D),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 60),
+              Container(
+                constraints: BoxConstraints(maxWidth: ResponsiveHelper.getMaxWidth(context)),
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: TextField(
+                  controller: _emailController,
+                  decoration: AppStyles.getInputDecoration(context, 'E-Mail'),
+                  style: AppStyles.fieldStyle(context),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+              ),
+              SizedBox(height: 20),
+              Container(
+                constraints: BoxConstraints(maxWidth: ResponsiveHelper.getMaxWidth(context)),
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: TextField(
+                  controller: _passwordController,
+                  decoration: AppStyles.getInputDecoration(context, 'Passwort'),
+                  style: AppStyles.fieldStyle(context),
+                  obscureText: true,
+                ),
+              ),
+              SizedBox(height: 30),
+              SizedBox(
+                width: ResponsiveHelper.getMaxWidth(context) - 40,
+                height: ResponsiveHelper.getButtonHeight(context),
+                child: ElevatedButton(
+                  onPressed: _login,
+                  style: AppStyles.getElevatedButtonStyle(),
+                  child: Text(
+                    'Anmelden',
+                    style: AppStyles.buttonStyle(context),
                   ),
-                // #endregion
-
-                // #region Login Form
+                ),
+              ),
+              SizedBox(height: 20),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => RegisterScreen()),
+                  );
+                },
+                child: Text(
+                  'Noch kein Konto? Registrieren',
+                  style: AppStyles.labelStyle(context).copyWith(
+                    fontSize: ResponsiveHelper.getLabelFontSize(context) * 0.8,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+              if (_errorMessage.isNotEmpty) ...[
+                SizedBox(height: 20),
                 Container(
-                  width: double.infinity,
-                  constraints: BoxConstraints(maxWidth: 320),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // #region Email Field
-                      Text(
-                        'E-MAIL',
-                        style: TextStyle(
-                          fontSize: 30,
-                          color: primaryColor,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-                      TextField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        style: TextStyle(
-                          fontSize: 25,
-                          color: primaryColor,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'E-MAIL',
-                          hintStyle: TextStyle(
-                            fontSize: 25,
-                            color: buttonColor,
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: buttonColor, width: 2),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 10,
-                          ),
-                        ),
-                        onChanged: (value) => setState(() {
-                          _errorMessage = null;
-                        }),
-                      ),
-                      // #endregion
-
-                      SizedBox(height: 10),
-
-                      // #region Password Field
-                      Text(
-                        'PASSWORT',
-                        style: TextStyle(
-                          fontSize: 30,
-                          color: primaryColor,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        style: TextStyle(
-                          fontSize: 25,
-                          color: primaryColor,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'PASSWORT',
-                          hintStyle: TextStyle(
-                            fontSize: 25,
-                            color: buttonColor,
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: buttonColor, width: 2),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 10,
-                          ),
-                        ),
-                        onChanged: (value) => setState(() {
-                          _errorMessage = null;
-                        }),
-                      ),
-                      // #endregion
-
-                      SizedBox(height: 5),
-
-                      // #region Forgot Password Link
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: _isLoading ? null : _resetPassword,
-                          child: Text(
-                            'PASSWORT VERGESSEN?',
-                            style: TextStyle(
-                              color: primaryColor,
-                              fontSize: 15,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ),
-                      ),
-                      // #endregion
-
-                      SizedBox(height: 30),
-
-                      // #region Action Buttons
-                      Column(
-                        children: [
-                          // Login Button
-                          SizedBox(
-                            width: double.infinity,
-                            height: 56,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _signInWithEmailAndPassword,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: buttonColor,
-                                foregroundColor: primaryColor,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: _isLoading
-                                  ? SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                                ),
-                              )
-                                  : Text(
-                                'LOGIN',
-                                style: TextStyle(
-                                  fontSize: 30,
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          SizedBox(height: 10),
-
-                          // Registrieren Button
-                          SizedBox(
-                            width: double.infinity,
-                            height: 56,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => RegisterScreen()),
-                                );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: buttonColor,
-                                foregroundColor: primaryColor,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: Text(
-                                'REGISTRIEREN',
-                                style: TextStyle(
-                                  fontSize: 30,
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          SizedBox(height: 10),
-
-                          // Beenden Button
-                          SizedBox(
-                            width: double.infinity,
-                            height: 56,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : () {
-                                // App beenden (nur auf mobilen Geräten)
-                                Navigator.of(context).pop();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: buttonColor,
-                                foregroundColor: primaryColor,
-                                disabledBackgroundColor: buttonColor.withOpacity(0.5),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: Text(
-                                'BEENDEN',
-                                style: TextStyle(
-                                  fontSize: 30,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      // #endregion
-                    ],
+                  constraints: BoxConstraints(maxWidth: ResponsiveHelper.getMaxWidth(context)),
+                  margin: EdgeInsets.symmetric(horizontal: 20),
+                  padding: EdgeInsets.all(10),
+                  decoration: AppStyles.getErrorBoxDecoration(),
+                  child: Text(
+                    _errorMessage,
+                    style: AppStyles.fieldStyle(context).copyWith(color: Colors.red[800]),
+                    textAlign: TextAlign.center,
                   ),
                 ),
-                // #endregion
-
-                SizedBox(height: 32),
               ],
-            ),
+            ],
           ),
         ),
       ),
     );
   }
-  // #endregion
 
-  // #region Dispose
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
-// #endregion
 }
-// #endregion
+//#endregion
 
-// #region Register Screen
+//#region RegisterScreen
 class RegisterScreen extends StatefulWidget {
   @override
   _RegisterScreenState createState() => _RegisterScreenState();
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  // #region Controllers und Variablen
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
-  final TextEditingController _usernameController = TextEditingController();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  String _errorMessage = '';
+  bool _themeLoaded = false;
 
-  bool _isLoading = false;
-  String? _errorMessage;
+  @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
 
-  // Farben
-  final Color backgroundColor = Color(0xFFC7F0EC);
-  final Color primaryColor = Color(0xFF40615F);
-  final Color buttonColor = Color(0xFF88D1CA);
-  // #endregion
+  Future<void> _loadTheme() async {
+    await AppTheme.loadTurquoiseTheme();
+    setState(() {
+      _themeLoaded = true;
+    });
+  }
 
-  // #region Registration Method
-  Future<void> _registerWithEmailAndPassword() async {
-    // Validierung
+  Future<void> _register() async {
     if (_passwordController.text != _confirmPasswordController.text) {
       setState(() {
         _errorMessage = 'Passwörter stimmen nicht überein';
@@ -499,455 +236,374 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    if (_passwordController.text.length < 6) {
-      setState(() {
-        _errorMessage = 'Passwort muss mindestens 6 Zeichen haben';
-      });
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
     try {
-      // Benutzer erstellen
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
-        password: _passwordController.text,
+        password: _passwordController.text.trim(),
       );
 
-      // Hier später Firestore-Daten speichern
-      // TODO: User-Daten in Firestore speichern
+      if (userCredential.user != null) {
+        await FirebaseFirestore.instance
+            .collection('user')
+            .doc(userCredential.user!.uid)
+            .set({
+          'email': _emailController.text.trim(),
+          'themeID': 'turquoise',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
 
-      // Zurück zum Login (AuthWrapper übernimmt die Navigation)
-      Navigator.pop(context);
-
-    } on FirebaseAuthException catch (e) {
-      setState(() {
-        switch (e.code) {
-          case 'weak-password':
-            _errorMessage = 'Passwort ist zu schwach';
-            break;
-          case 'email-already-in-use':
-            _errorMessage = 'E-Mail wird bereits verwendet';
-            break;
-          case 'invalid-email':
-            _errorMessage = 'Ungültige E-Mail-Adresse';
-            break;
-          default:
-            _errorMessage = 'Registrierung fehlgeschlagen: ${e.message}';
-        }
-      });
+        await AppTheme.loadUserTheme();
+        Navigator.pop(context);
+      }
     } catch (e) {
       setState(() {
-        _errorMessage = 'Ein unerwarteter Fehler ist aufgetreten';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
+        _errorMessage = 'Registrierung fehlgeschlagen: ${e.toString()}';
       });
     }
   }
-  // #endregion
 
-  // #region UI Build Method
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-        title: Text('Registrierung'),
-        elevation: 0,
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(height: 20),
+    if (!_themeLoaded) {
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
-                // #region Logo
+    return Scaffold(
+      backgroundColor: AppTheme.colors.mainBackground,
+      appBar: AppBar(
+        backgroundColor: AppTheme.colors.mainBackground,
+        elevation: 0,
+        iconTheme: IconThemeData(color: AppTheme.colors.mainTextColor),
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          // child: Padding(
+          //   padding: EdgeInsets.only(top: 20), // Alles nach oben verschieben
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.start, // Von center zu start geändert
+              children: [
                 Container(
-                  width: 100,
-                  height: 100,
+                  width: ResponsiveHelper.getLogoSize(context),
+                  height: ResponsiveHelper.getLogoSize(context),
                   child: Image.asset(
                     'assets/images/paw.png',
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          color: buttonColor,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.pets,
-                          size: 60,
-                          color: primaryColor,
-                        ),
-                      );
-                    },
+                    fit: BoxFit.contain,
                   ),
                 ),
-                // #endregion
-
+                Text(
+                  'Registrieren',
+                  style: AppStyles.titleStyle(context),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 30), // Reduziert von 40 auf 30
+                Container(
+                  constraints: BoxConstraints(maxWidth: ResponsiveHelper.getMaxWidth(context)),
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: TextField(
+                    controller: _emailController,
+                    decoration: AppStyles.getInputDecoration(context, 'E-Mail'),
+                    style: AppStyles.fieldStyle(context),
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                ),
+                SizedBox(height: 20),
+                Container(
+                  constraints: BoxConstraints(maxWidth: ResponsiveHelper.getMaxWidth(context)),
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: TextField(
+                    controller: _passwordController,
+                    decoration: AppStyles.getInputDecoration(context, 'Passwort'),
+                    style: AppStyles.fieldStyle(context),
+                    obscureText: true,
+                  ),
+                ),
+                SizedBox(height: 20),
+                Container(
+                  constraints: BoxConstraints(maxWidth: ResponsiveHelper.getMaxWidth(context)),
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: TextField(
+                    controller: _confirmPasswordController,
+                    decoration: AppStyles.getInputDecoration(context, 'Passwort bestätigen'),
+                    style: AppStyles.fieldStyle(context),
+                    obscureText: true,
+                  ),
+                ),
                 SizedBox(height: 30),
-
-                // #region Error Message
-                if (_errorMessage != null)
-                  Container(
-                    width: double.infinity,
-                    constraints: BoxConstraints(maxWidth: 320),
-                    margin: EdgeInsets.only(bottom: 20),
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red[100],
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.red),
-                    ),
+                SizedBox(
+                  width: ResponsiveHelper.getMaxWidth(context) - 40,
+                  height: ResponsiveHelper.getButtonHeight(context),
+                  child: ElevatedButton(
+                    onPressed: _register,
+                    style: AppStyles.getElevatedButtonStyle(),
                     child: Text(
-                      _errorMessage!,
-                      style: TextStyle(
-                        color: Colors.red[800],
-                        fontSize: 14,
-                      ),
+                      'Registrieren',
+                      style: AppStyles.buttonStyle(context),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 110),
+                if (_errorMessage.isNotEmpty) ...[
+                  SizedBox(height: 20),
+                  Container(
+                    constraints: BoxConstraints(maxWidth: ResponsiveHelper.getMaxWidth(context)),
+                    margin: EdgeInsets.symmetric(horizontal: 20),
+                    padding: EdgeInsets.all(10),
+                    decoration: AppStyles.getErrorBoxDecoration(),
+                    child: Text(
+                      _errorMessage,
+                      style: AppStyles.fieldStyle(context).copyWith(color: Colors.red[800]),
                       textAlign: TextAlign.center,
                     ),
                   ),
-                // #endregion
-
-                // #region Registration Form
-                Container(
-                  width: double.infinity,
-                  constraints: BoxConstraints(maxWidth: 320),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // #region Username Field
-                      Text(
-                        'BENUTZERNAME',
-                        style: TextStyle(
-                          fontSize: 30,
-                          color: primaryColor,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-                      TextField(
-                        controller: _usernameController,
-                        style: TextStyle(
-                          fontSize: 25,
-                          color: primaryColor,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'BENUTZERNAME',
-                          hintStyle: TextStyle(
-                            fontSize: 25,
-                            color: buttonColor,
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: buttonColor, width: 2),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 10,
-                          ),
-                        ),
-                        onChanged: (value) => setState(() {
-                          _errorMessage = null;
-                        }),
-                      ),
-                      // #endregion
-
-                      SizedBox(height: 15),
-
-                      // #region Email Field
-                      Text(
-                        'E-MAIL',
-                        style: TextStyle(
-                          fontSize: 30,
-                          color: primaryColor,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-                      TextField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        style: TextStyle(
-                          fontSize: 25,
-                          color: primaryColor,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'E-MAIL',
-                          hintStyle: TextStyle(
-                            fontSize: 25,
-                            color: buttonColor,
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: buttonColor, width: 2),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 10,
-                          ),
-                        ),
-                        onChanged: (value) => setState(() {
-                          _errorMessage = null;
-                        }),
-                      ),
-                      // #endregion
-
-                      SizedBox(height: 15),
-
-                      // #region Password Field
-                      Text(
-                        'PASSWORT',
-                        style: TextStyle(
-                          fontSize: 30,
-                          color: primaryColor,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        style: TextStyle(
-                          fontSize: 25,
-                          color: primaryColor,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'PASSWORT',
-                          hintStyle: TextStyle(
-                            fontSize: 25,
-                            color: buttonColor,
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: buttonColor, width: 2),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 10,
-                          ),
-                        ),
-                        onChanged: (value) => setState(() {
-                          _errorMessage = null;
-                        }),
-                      ),
-                      // #endregion
-
-                      SizedBox(height: 15),
-
-                      // #region Confirm Password Field
-                      Text(
-                        'PASSWORT BESTÄTIGEN',
-                        style: TextStyle(
-                          fontSize: 30,
-                          color: primaryColor,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-                      TextField(
-                        controller: _confirmPasswordController,
-                        obscureText: true,
-                        style: TextStyle(
-                          fontSize: 25,
-                          color: primaryColor,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'PASSWORT BESTÄTIGEN',
-                          hintStyle: TextStyle(
-                            fontSize: 25,
-                            color: buttonColor,
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: buttonColor, width: 2),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 10,
-                          ),
-                        ),
-                        onChanged: (value) => setState(() {
-                          _errorMessage = null;
-                        }),
-                      ),
-                      // #endregion
-
-                      SizedBox(height: 30),
-
-                      // #region Action Buttons
-                      // Registrieren Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _registerWithEmailAndPassword,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: buttonColor,
-                            foregroundColor: primaryColor,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: _isLoading
-                              ? SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                            ),
-                          )
-                              : Text(
-                            'REGISTRIEREN',
-                            style: TextStyle(
-                              fontSize: 30,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      SizedBox(height: 10),
-
-                      // Zurück Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : () {
-                            Navigator.pop(context);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: buttonColor,
-                            foregroundColor: primaryColor,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: Text(
-                            'ZURÜCK',
-                            style: TextStyle(
-                              fontSize: 30,
-                            ),
-                          ),
-                        ),
-                      ),
-                      // #endregion
-                    ],
-                  ),
-                ),
-                // #endregion
-
-                SizedBox(height: 32),
+                ],
               ],
             ),
-          ),
+          // ),
         ),
       ),
     );
   }
-  // #endregion
 
-  // #region Dispose
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _usernameController.dispose();
     super.dispose();
   }
-// #endregion
 }
-// #endregion
+//#endregion
 
-// #region Home Screen
-class HomeScreen extends StatelessWidget {
+//#region HomeScreen
+class HomeScreen extends StatefulWidget {
+  @override
+  _HomeScreenState createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _themeLoaded = false;
+  String _selectedTheme = 'turquoise';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserTheme();
+  }
+
+  Future<void> _loadUserTheme() async {
+    await AppTheme.loadUserTheme();
+
+    // Lade die aktuelle Theme-ID des Users
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('user')
+            .doc(currentUser.uid)
+            .get();
+
+        if (userDoc.exists) {
+          Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+          _selectedTheme = userData['themeID'] ?? 'turquoise';
+        }
+      }
+    } catch (e) {
+      print('Fehler beim Laden der Theme-ID: $e');
+    }
+
+    setState(() {
+      _themeLoaded = true;
+    });
+  }
+
+  Future<void> _updateUserTheme(String themeID) async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        await FirebaseFirestore.instance
+            .collection('user')
+            .doc(currentUser.uid)
+            .update({'themeID': themeID});
+
+        setState(() {
+          _selectedTheme = themeID;
+        });
+
+        await AppTheme.loadUserTheme();
+        setState(() {});
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fehler beim Aktualisieren des Themes: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    if (!_themeLoaded) {
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
-      backgroundColor: Color(0xFFC7F0EC),
-      appBar: AppBar(
-        title: Text('helpingPaw'),
-        backgroundColor: Color(0xFF40615F),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.logout),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-            },
+      backgroundColor: AppTheme.colors.mainBackground,
+      body: Stack(
+        children: [
+          // Hintergrund - Katzenbaum
+          Positioned(
+            bottom: 60,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Image.asset(
+                'assets/images/cattreeColor.png',
+                height: MediaQuery.of(context).size.height * 0.5,
+                fit: BoxFit.fitHeight,
+              ),
+            ),
+          ),
+
+          // Katzen - schlafend (später dynamisch)
+          Positioned(
+            bottom: 140,
+            left: 120,
+            right: 0,
+            child: Transform.scale(
+              scaleX: -1,
+              child: Image.asset(
+                'assets/images/mimiSleep.png',
+                width: 160,
+                height: 160,
+              ),
+            ),
+          ),
+
+          Positioned(
+            bottom: 338,
+            left: 115,
+            right: 0,
+            child: Image.asset(
+              'assets/images/plumSleep.png',
+              width: 160,
+              height: 160,
+            ),
+          ),
+
+          // Pfote rechts oben - später Menübutton
+          Positioned(
+            top: 50,
+            right: 20,
+            child: GestureDetector(
+              onTap: () {
+                _showMenu();
+              },
+              child: Container(
+                width: 70,
+                height: 70,
+                child: Image.asset(
+                  'assets/images/paw.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ),
+
+          // Bereich für Timer (später) - jetzt nur Platzhalter
+          Positioned(
+            top: MediaQuery.of(context).size.height * 0.15,
+            left: 20,
+            right: 20,
+            child: Container(
+              height: 100,
+              // Hier wird später der Timer-Bereich sein
+              // Momentan unsichtbar, nur als Platzhalter
+            ),
           ),
         ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Willkommen!',
-              style: TextStyle(
-                fontSize: 32,
-                color: Color(0xFF40615F),
+    );
+  }
+
+  void _showMenu() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: AppTheme.colors.mainBackground,
+          title: Text(
+            'Menü',
+            style: AppStyles.titleStyle(context).copyWith(
+              fontSize: ResponsiveHelper.getLabelFontSize(context),
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Theme auswählen:',
+                style: AppStyles.labelStyle(context).copyWith(
+                  fontSize: ResponsiveHelper.getLabelFontSize(context) * 0.8,
+                ),
+              ),
+              SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: ['turquoise', 'dark'].contains(_selectedTheme) ? _selectedTheme : 'turquoise',
+                decoration: AppStyles.getInputDecoration(context, 'Theme auswählen'),
+                style: AppStyles.fieldStyle(context),
+                dropdownColor: AppTheme.colors.mainBackground,
+                items: <String>['turquoise', 'dark'].map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(
+                      value == 'turquoise' ? 'Türkis (Standard)' : 'Dunkel',
+                      style: AppStyles.fieldStyle(context).copyWith(
+                        color: AppTheme.colors.mainTextColor,
+                        fontSize: ResponsiveHelper.getFieldFontSize(context) * 0.8,
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    _updateUserTheme(newValue);
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text(
+                'Schließen',
+                style: AppStyles.labelStyle(context).copyWith(
+                  fontSize: ResponsiveHelper.getLabelFontSize(context) * 0.7,
+                ),
               ),
             ),
-            SizedBox(height: 20),
-            Text(
-              'Du bist eingeloggt als:',
-              style: TextStyle(
-                fontSize: 18,
-                color: Color(0xFF40615F),
-              ),
-            ),
-            SizedBox(height: 10),
-            Text(
-              user?.email ?? 'Unbekannt',
-              style: TextStyle(
-                fontSize: 16,
-                color: Color(0xFF88D1CA),
-                fontWeight: FontWeight.bold,
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await FirebaseAuth.instance.signOut();
+              },
+              child: Text(
+                'Ausloggen',
+                style: AppStyles.labelStyle(context).copyWith(
+                  fontSize: ResponsiveHelper.getLabelFontSize(context) * 0.7,
+                  color: Colors.red,
+                ),
               ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
-// #endregion
+//#endregion
