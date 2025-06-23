@@ -9,10 +9,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  firebase_core: ^2.32.0
-  firebase_auth: ^4.16.0
-  cloud_firestore: ^4.13.6
-  # Weitere Firebase-Pakete je nachdem, was du brauchst
+
+  # Firebase-Packages (deine ursprünglichen Versionen)
+  firebase_core: ^2.15.0
+  firebase_auth: ^4.7.0
+  cloud_firestore: ^4.8.0
+
+  # Nur Audio - KEINE Notifications mehr!
+  audioplayers: ^5.0.0
 
 dev_dependencies:
   flutter_test:
@@ -23,13 +27,8 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/images/paw.png
-    - assets/images/cattreeColor.png
-    - assets/images/mimiSit.png
-    - assets/images/mimiSleep.png
-    - assets/images/paw.png
-    - assets/images/plumSit.png
-    - assets/images/plumSleep.png
+    - assets/images/
+    - assets/sounds/  # Für plumScream.m4a Sound-Datei
 
   fonts:
     - family: Jersey

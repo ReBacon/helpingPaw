@@ -24,8 +24,12 @@ class ThemeColors {
 
 class AppTheme {
   static ThemeColors _colors = ThemeColors.defaultColors;
-
   static ThemeColors get colors => _colors;
+
+  // Sicherer Fallback - lädt Theme ohne Firestore-Zugriff
+  static void loadDefaultTheme() {
+    _colors = ThemeColors.defaultColors;
+  }
 
   // Hilfsfunktion um Farben sicher zu konvertieren
   static Color _parseColor(dynamic colorValue, Color fallback) {
@@ -52,9 +56,11 @@ class AppTheme {
     return fallback;
   }
 
-  // Lädt immer das Turquoise Theme (für Login/Registrierung)
+  // Lädt Turquoise Theme - aber mit Error Handling
   static Future<void> loadTurquoiseTheme() async {
     try {
+      print('🔄 Versuche Turquoise Theme zu laden...');
+
       DocumentSnapshot doc = await FirebaseFirestore.instance
           .collection('theme')
           .doc('turquoise')
@@ -67,21 +73,29 @@ class AppTheme {
           mainBackground2: _parseColor(data['background2'], const Color(0xFF88D1CA)),
           mainTextColor: _parseColor(data['textColor'], const Color(0xFF40615F)),
         );
+        print('✅ Turquoise Theme erfolgreich geladen');
+      } else {
+        print('⚠️ Turquoise Theme Dokument nicht gefunden - verwende Default');
+        _colors = ThemeColors.defaultColors;
       }
     } catch (e) {
-      print('Fehler beim Laden des Turquoise-Themes: $e');
+      print('❌ Fehler beim Laden des Turquoise-Themes: $e');
+      print('🔄 Verwende Default Theme als Fallback');
       _colors = ThemeColors.defaultColors;
     }
   }
 
-  // Lädt das User-spezifische Theme (nach dem Login)
+  // Lädt User-Theme (nach Authentifizierung)
   static Future<void> loadUserTheme() async {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser == null) {
+        print('⚠️ Kein authentifizierter User - lade Turquoise Theme');
         await loadTurquoiseTheme();
         return;
       }
+
+      print('🔄 Lade User Theme für: ${currentUser.uid}');
 
       // Hole User-Dokument
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
@@ -94,6 +108,8 @@ class AppTheme {
         String? themeID = userData['themeID'];
 
         if (themeID != null) {
+          print('🎨 User Theme ID: $themeID');
+
           // Hole Theme basierend auf themeID
           DocumentSnapshot themeDoc = await FirebaseFirestore.instance
               .collection('theme')
@@ -107,15 +123,18 @@ class AppTheme {
               mainBackground2: _parseColor(themeData['background2'], const Color(0xFF88D1CA)),
               mainTextColor: _parseColor(themeData['textColor'], const Color(0xFF40615F)),
             );
+            print('✅ User Theme ($themeID) erfolgreich geladen');
             return;
           }
         }
       }
 
       // Fallback zu Turquoise wenn User-Theme nicht gefunden
+      print('⚠️ User Theme nicht gefunden - lade Turquoise Theme');
       await loadTurquoiseTheme();
     } catch (e) {
-      print('Fehler beim Laden des User-Themes: $e');
+      print('❌ Fehler beim Laden des User-Themes: $e');
+      print('🔄 Fallback zu Turquoise Theme');
       await loadTurquoiseTheme();
     }
   }
@@ -179,6 +198,13 @@ class ResponsiveHelper {
     if (isSmallScreen(context)) return 48;
     if (isMediumScreen(context)) return 56;
     return 64;
+  }
+
+  // Neue Größe für Menü-Buttons
+  static double getMenuButtonHeight(BuildContext context) {
+    if (isSmallScreen(context)) return 50;
+    if (isMediumScreen(context)) return 60;
+    return 80;
   }
 
   static EdgeInsets getContentPadding(BuildContext context) {
@@ -257,11 +283,70 @@ class AppStyles {
     );
   }
 
+  // Neue Button-Styles für Menü-Buttons
+  static ButtonStyle getMenuButtonStyle() {
+    return ElevatedButton.styleFrom(
+      backgroundColor: AppTheme.colors.mainBackground2,
+      foregroundColor: AppTheme.colors.mainTextColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      elevation: 0,
+    );
+  }
+
   static BoxDecoration getErrorBoxDecoration() {
     return BoxDecoration(
       color: Colors.red[100],
       borderRadius: BorderRadius.circular(10),
       border: Border.all(color: Colors.red),
+    );
+  }
+}
+
+// Neue Widget-Komponenten
+class AppWidgets {
+  /// Paw Button - für Menu-Navigation und Back-Buttons
+  /// [onPressed]: Callback-Funktion wenn Button gedrückt wird
+  /// [isBackButton]: Optional - wenn true, wird Icon gespiegelt für Back-Button-Look
+  static Widget pawButton({
+    required VoidCallback onPressed,
+    bool isBackButton = false,
+  }) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: 70,
+        height: 70,
+        child: Image.asset(
+          'assets/images/paw.png',
+          color: AppTheme.colors.mainTextColor,
+          fit: BoxFit.contain,
+        ),
+      ),
+    );
+  }
+
+  /// Menu Button - für die Hauptmenü-Buttons
+  /// [text]: Der angezeigte Text
+  /// [onPressed]: Callback-Funktion wenn Button gedrückt wird
+  /// [context]: BuildContext für responsive Größen
+  static Widget menuButton({
+    required String text,
+    required VoidCallback onPressed,
+    required BuildContext context,
+  }) {
+    return SizedBox(
+      width: ResponsiveHelper.getMaxWidth(context),
+      height: ResponsiveHelper.getMenuButtonHeight(context),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: AppStyles.getMenuButtonStyle(),
+        child: Text(
+          text,
+          style: AppStyles.buttonStyle(context),
+        ),
+      ),
     );
   }
 }
