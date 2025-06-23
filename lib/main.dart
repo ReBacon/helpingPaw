@@ -14,8 +14,12 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  // Vereinfachte Initialisierung - nur für Sound
   await NotificationService.initialize();
+
+  // Timer mit Standardwerten initialisieren
+  GlobalTimer.initializeDefault();
+  GlobalPomodoroTimer.initializeDefault();
+
   runApp(MyApp());
 }
 
@@ -56,6 +60,15 @@ class AuthWrapper extends StatelessWidget {
 
 //endregion
 
+//region enums
+// Enum für Pomodoro-Phasen
+enum PomodoroPhase {
+  work,
+  shortBreak,
+  longBreak,
+}
+//endregion
+
 //region timer
 
 // Globale Timer-Klasse für persistenten Timer
@@ -68,7 +81,7 @@ class GlobalTimer {
   static int _setHours = 0;
   static int _setMinutes = 0;
   static int _setSeconds = 0;
-  static bool _isFinished = false; // Neu: Timer abgelaufen Status
+  static bool _isFinished = false;
 
   // Callback für UI-Updates
   static VoidCallback? _onTimerUpdate;
@@ -83,6 +96,18 @@ class GlobalTimer {
   static int get setHours => _setHours;
   static int get setMinutes => _setMinutes;
   static int get setSeconds => _setSeconds;
+
+  // Standardwerte setzen
+  static void initializeDefault() {
+    _setHours = 0;
+    _setMinutes = 0;
+    _setSeconds = 0;
+    _currentHours = _setHours;
+    _currentMinutes = _setMinutes;
+    _currentSeconds = _setSeconds;
+    _isFinished = false;
+    _notifyUpdate();
+  }
 
   // Timer-Zeit setzen
   static void setTime(int hours, int minutes, int seconds) {
@@ -99,11 +124,9 @@ class GlobalTimer {
   // Timer starten/pausieren
   static void toggleTimer() {
     if (_isRunning) {
-      // Timer pausieren
       _timer?.cancel();
       _isRunning = false;
     } else {
-      // Timer starten
       _isRunning = true;
       _isFinished = false;
 
@@ -118,14 +141,10 @@ class GlobalTimer {
           _currentMinutes = 59;
           _currentSeconds = 59;
         } else {
-          // Timer abgelaufen
           _timer?.cancel();
           _isRunning = false;
           _isFinished = true;
-
-          // ✅ Nur Sound abspielen - keine komplexe Notification
           NotificationService.showTimerFinishedNotification();
-
           _onTimerFinished?.call();
         }
         _notifyUpdate();
@@ -144,7 +163,7 @@ class GlobalTimer {
     _notifyUpdate();
   }
 
-  // Timer komplett neu (alles auf 0)
+  // Timer komplett neu
   static void newTimer() {
     _timer?.cancel();
     _isRunning = false;
@@ -193,6 +212,274 @@ class GlobalTimer {
     _timer?.cancel();
     _onTimerUpdate = null;
     _onTimerFinished = null;
+  }
+}
+
+// Globale Pomodoro-Timer-Klasse
+class GlobalPomodoroTimer {
+  static Timer? _timer;
+  static bool _isRunning = false;
+  static int _currentHours = 0;
+  static int _currentMinutes = 0;
+  static int _currentSeconds = 0;
+  static bool _isFinished = false;
+
+  // Pomodoro-spezifische Variablen
+  static int _workTimeMinutes = 25;
+  static int _shortBreakMinutes = 5;
+  static int _longBreakMinutes = 15;
+  static int _totalCycles = 5;
+  static int _longBreakAfter = 4;
+
+  // Aktuelle Phase tracking
+  static PomodoroPhase _currentPhase = PomodoroPhase.work;
+  static int _currentCycle = 1;
+  static int _pauseCounter = 0;
+  static bool _allCyclesCompleted = false;
+
+  // Standard-Einstellungen
+  static const int _defaultWorkTime = 25;
+  static const int _defaultShortBreak = 5;
+  static const int _defaultLongBreak = 15;
+  static const int _defaultTotalCycles = 5;
+  static const int _defaultLongBreakAfter = 4;
+
+  // Callbacks
+  static VoidCallback? _onTimerUpdate;
+  static VoidCallback? _onTimerFinished;
+  static VoidCallback? _onPhaseChange;
+
+  // Getter
+  static bool get isRunning => _isRunning;
+  static bool get isFinished => _isFinished;
+  static bool get allCyclesCompleted => _allCyclesCompleted;
+  static int get currentHours => _currentHours;
+  static int get currentMinutes => _currentMinutes;
+  static int get currentSeconds => _currentSeconds;
+  static PomodoroPhase get currentPhase => _currentPhase;
+  static int get currentCycle => _currentCycle;
+  static int get totalCycles => _totalCycles;
+  static int get workTimeMinutes => _workTimeMinutes;
+  static int get shortBreakMinutes => _shortBreakMinutes;
+  static int get longBreakMinutes => _longBreakMinutes;
+  static int get longBreakAfter => _longBreakAfter;
+
+  // Einstellungen setzen
+  static void setWorkTime(int minutes) {
+    if (!_isRunning) {
+      _workTimeMinutes = minutes;
+      if (_currentPhase == PomodoroPhase.work) {
+        _setCurrentTime(_workTimeMinutes);
+      }
+    }
+  }
+
+  static void setShortBreak(int minutes) {
+    if (!_isRunning) {
+      _shortBreakMinutes = minutes;
+      if (_currentPhase == PomodoroPhase.shortBreak) {
+        _setCurrentTime(_shortBreakMinutes);
+      }
+    }
+  }
+
+  static void setLongBreak(int minutes) {
+    if (!_isRunning) {
+      _longBreakMinutes = minutes;
+      if (_currentPhase == PomodoroPhase.longBreak) {
+        _setCurrentTime(_longBreakMinutes);
+      }
+    }
+  }
+
+  static void setTotalCycles(int cycles) {
+    if (!_isRunning) {
+      _totalCycles = cycles;
+    }
+  }
+
+  static void setLongBreakAfter(int after) {
+    if (!_isRunning) {
+      _longBreakAfter = after;
+    }
+  }
+
+  // Hilfsfunktion: Aktuelle Zeit basierend auf Phase setzen
+  static void _setCurrentTime(int minutes) {
+    _currentHours = 0;
+    _currentMinutes = minutes;
+    _currentSeconds = 0;
+    _notifyUpdate();
+  }
+
+  // Timer starten/pausieren
+  static void toggleTimer() {
+    if (_isRunning) {
+      _timer?.cancel();
+      _isRunning = false;
+    } else {
+      _isRunning = true;
+      _isFinished = false;
+
+      _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+        if (_currentSeconds > 0) {
+          _currentSeconds--;
+        } else if (_currentMinutes > 0) {
+          _currentMinutes--;
+          _currentSeconds = 59;
+        } else if (_currentHours > 0) {
+          _currentHours--;
+          _currentMinutes = 59;
+          _currentSeconds = 59;
+        } else {
+          _handlePhaseComplete();
+        }
+        _notifyUpdate();
+      });
+    }
+  }
+
+  // Phase abgeschlossen
+  static void _handlePhaseComplete() {
+    NotificationService.showTimerFinishedNotification();
+
+    switch (_currentPhase) {
+      case PomodoroPhase.work:
+        _currentCycle++;
+
+        if (_currentCycle > _totalCycles) {
+          // Alle Zyklen abgeschlossen - Timer stoppen und als finished markieren
+          _timer?.cancel();
+          _isRunning = false;
+          _isFinished = true;  // ← DIESE ZEILE FEHLTE!
+          _allCyclesCompleted = true;
+          _onTimerFinished?.call();
+          return;
+        } else {
+          // Nur Pause starten wenn noch weitere Zyklen kommen
+          _pauseCounter++;
+
+          if (_pauseCounter % _longBreakAfter == 0) {
+            _currentPhase = PomodoroPhase.longBreak;
+            _setCurrentTime(_longBreakMinutes);
+          } else {
+            _currentPhase = PomodoroPhase.shortBreak;
+            _setCurrentTime(_shortBreakMinutes);
+          }
+        }
+        break;
+
+      case PomodoroPhase.shortBreak:
+      case PomodoroPhase.longBreak:
+        _currentPhase = PomodoroPhase.work;
+        _setCurrentTime(_workTimeMinutes);
+        break;
+    }
+
+    _onPhaseChange?.call();
+  }
+
+  // Alle Zyklen abgeschlossen
+  static void _completeAllCycles() {
+    _timer?.cancel();
+    _isRunning = false;
+    _isFinished = true;
+    _allCyclesCompleted = true;
+    _onTimerFinished?.call();
+  }
+
+  // Timer zurücksetzen
+  static void resetTimer() {
+    _timer?.cancel();
+    _isRunning = false;
+    _isFinished = false;
+    _allCyclesCompleted = false;
+    _currentPhase = PomodoroPhase.work;
+    _currentCycle = 1;
+    _pauseCounter = 0;
+    _setCurrentTime(_workTimeMinutes);
+    _notifyUpdate();
+  }
+
+  // Neuer Timer
+  static void newTimer() {
+    _timer?.cancel();
+    _isRunning = false;
+    _isFinished = false;
+    _allCyclesCompleted = false;
+
+    _workTimeMinutes = _defaultWorkTime;
+    _shortBreakMinutes = _defaultShortBreak;
+    _longBreakMinutes = _defaultLongBreak;
+    _totalCycles = _defaultTotalCycles;
+    _longBreakAfter = _defaultLongBreakAfter;
+
+    _currentPhase = PomodoroPhase.work;
+    _currentCycle = 1;
+    _pauseCounter = 0;
+    _setCurrentTime(_workTimeMinutes);
+    _notifyUpdate();
+  }
+
+  // Timer finished Status zurücksetzen
+  static void clearFinished() {
+    _isFinished = false;
+    _allCyclesCompleted = false;
+    _notifyUpdate();
+  }
+
+  // Callbacks setzen
+  static void setCallbacks({
+    VoidCallback? onUpdate,
+    VoidCallback? onFinished,
+    VoidCallback? onPhaseChange
+  }) {
+    _onTimerUpdate = onUpdate;
+    _onTimerFinished = onFinished;
+    _onPhaseChange = onPhaseChange;
+  }
+
+  // Update benachrichtigen
+  static void _notifyUpdate() {
+    _onTimerUpdate?.call();
+  }
+
+  // Zeit formatieren
+  static String getFormattedTime() {
+    return '${_currentHours.toString().padLeft(2, '0')}:${_currentMinutes.toString().padLeft(2, '0')}:${_currentSeconds.toString().padLeft(2, '0')}';
+  }
+
+  // Display Text für HomeScreen
+  static String getDisplayPomodoroText() {
+    if (_allCyclesCompleted) {
+      return 'POMODORO ABGELAUFEN!';
+    }
+    return getFormattedTime();
+  }
+
+  // Phase als Text
+  static String getPhaseText() {
+    switch (_currentPhase) {
+      case PomodoroPhase.work:
+        return 'ARBEITSZEIT (${_currentCycle}/${_totalCycles})';
+      case PomodoroPhase.shortBreak:
+        return 'KURZE PAUSE';
+      case PomodoroPhase.longBreak:
+        return 'LANGE PAUSE';
+    }
+  }
+
+  // Initialisierung mit Standard-Werten
+  static void initializeDefault() {
+    newTimer();
+  }
+
+  // Cleanup
+  static void dispose() {
+    _timer?.cancel();
+    _onTimerUpdate = null;
+    _onTimerFinished = null;
+    _onPhaseChange = null;
   }
 }
 //endregion
@@ -559,14 +846,15 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _themeLoaded = false;
   String _selectedTheme = 'turquoise';
-  Timer? _uiUpdateTimer; // Zusätzlicher Timer für UI-Updates
+  Timer? _uiUpdateTimer;
 
   @override
   void initState() {
     super.initState();
     _loadUserTheme();
     _setupTimerCallbacks();
-    _startUIUpdateTimer(); // Zusätzliche UI-Update-Logik
+    _setupPomodoroCallbacks();
+    _startUIUpdateTimer();
   }
 
   Future<void> _loadUserTheme() async {
@@ -595,12 +883,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _setupTimerCallbacks() {
-    // Callbacks immer neu setzen wenn HomeScreen geladen wird
     GlobalTimer.setCallbacks(
       onUpdate: () {
         if (mounted) {
           setState(() {
-            // Nur loggen wenn Timer läuft
             if (GlobalTimer.isRunning) {
               print('🔄 HomeScreen Timer Update: ${GlobalTimer.getDisplayTimerText()}');
             }
@@ -617,40 +903,63 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Zusätzlicher UI-Update Timer für bessere Synchronisation
+  void _setupPomodoroCallbacks() {
+    GlobalPomodoroTimer.setCallbacks(
+      onUpdate: () {
+        if (mounted) {
+          setState(() {
+            if (GlobalPomodoroTimer.isRunning) {
+              print('🍅 HomeScreen Pomodoro Update: ${GlobalPomodoroTimer.getDisplayPomodoroText()}');
+            }
+          });
+        }
+      },
+      onFinished: () {
+        if (mounted) {
+          setState(() {
+            print('🍅 HomeScreen Pomodoro Finished!');
+          });
+        }
+      },
+      onPhaseChange: () {
+        if (mounted) {
+          setState(() {
+            print('🍅 HomeScreen Pomodoro Phase Change: ${GlobalPomodoroTimer.getPhaseText()}');
+          });
+        }
+      },
+    );
+  }
+
   void _startUIUpdateTimer() {
     _uiUpdateTimer = Timer.periodic(Duration(milliseconds: 500), (timer) {
-      if (mounted && GlobalTimer.isRunning) {
-        // Nur aktualisieren wenn Timer läuft oder beendet ist
-        setState(() {
-          // UI alle 500ms aktualisieren nur wenn Timer aktiv ist
-        });
+      if (mounted && (GlobalTimer.isRunning || GlobalPomodoroTimer.isRunning)) {
+        setState(() {});
       }
     });
   }
 
-  // Plum antippen - Timer finished Status zurücksetzen
   void _onPlumTapped() {
     if (GlobalTimer.isFinished) {
       GlobalTimer.clearFinished();
       print('🐱 Plum getappt - Timer finished Status zurückgesetzt');
+    } else if (GlobalPomodoroTimer.allCyclesCompleted) {
+      GlobalPomodoroTimer.clearFinished();
+      print('🐱 Plum getappt - Pomodoro finished Status zurückgesetzt');
     }
   }
 
-  // Timer Display Widget - HIER IST DIE WICHTIGE ÄNDERUNG
   Widget _buildTimerDisplay() {
     String displayText = GlobalTimer.getDisplayTimerText();
     bool isFinished = GlobalTimer.isFinished;
     bool isRunning = GlobalTimer.isRunning;
 
-    // Nur loggen wenn Timer läuft (nicht wenn finished)
     if (isRunning) {
       print('🖥️ HomeScreen Timer Display: $displayText (Running: $isRunning, Finished: $isFinished)');
     }
 
-    // Timer-Display nur anzeigen wenn Timer läuft oder beendet ist
     if (!isRunning && !isFinished) {
-      return Container(); // Leerer Container = unsichtbar
+      return Container();
     }
 
     return GestureDetector(
@@ -662,7 +971,7 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       child: Container(
         width: ResponsiveHelper.getMaxWidth(context) - 40,
-        height: ResponsiveHelper.getMenuButtonHeight(context) * 2.5, // Gleiche Höhe wie TimerScreen
+        height: ResponsiveHelper.getMenuButtonHeight(context) * 2.5,
         decoration: BoxDecoration(
           color: AppTheme.colors.mainBackground2,
           borderRadius: BorderRadius.circular(10),
@@ -671,25 +980,102 @@ class _HomeScreenState extends State<HomeScreen> {
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20), // Abstand links und rechts
+              padding: EdgeInsets.symmetric(horizontal: 20),
               child: Text(
                 displayText,
                 style: isFinished
-                    ? AppStyles.buttonStyle(context).copyWith(  // Button-Style für "Timer abgelaufen"
-                  fontSize: ResponsiveHelper.getTitleFontSize(context) * 0.6,  // ← Noch kleiner (0.6 statt 0.8)
+                    ? AppStyles.buttonStyle(context).copyWith(
+                  fontSize: ResponsiveHelper.getTitleFontSize(context) * 0.6,
                   color: AppTheme.colors.mainTextColor,
                   fontWeight: FontWeight.normal,
                 )
-                    : AppStyles.fieldStyle(context).copyWith(  // Normal-Style für laufenden Timer
+                    : AppStyles.fieldStyle(context).copyWith(
                   fontSize: ResponsiveHelper.getTitleFontSize(context) * 1.2,
                   color: AppTheme.colors.mainTextColor,
                   fontWeight: FontWeight.normal,
                 ),
                 textAlign: TextAlign.center,
-                maxLines: 3, // Erlaubt Zeilenumbruch auf 2 Zeilen
-                overflow: TextOverflow.visible, // Text wird umgebrochen statt abgeschnitten
+                maxLines: 3,
+                overflow: TextOverflow.visible,
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPomodoroDisplay() {
+    String displayText = GlobalPomodoroTimer.getDisplayPomodoroText();
+    String phaseText = GlobalPomodoroTimer.getPhaseText();
+    bool isFinished = GlobalPomodoroTimer.allCyclesCompleted;
+    bool isRunning = GlobalPomodoroTimer.isRunning;
+
+    if (isRunning) {
+      print('🖥️ HomeScreen Pomodoro Display: $displayText (Running: $isRunning, Finished: $isFinished)');
+    }
+
+    if (!isRunning && !isFinished) {
+      return Container();
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => PomodoroScreen()),
+        );
+      },
+      child: Container(
+        width: ResponsiveHelper.getMaxWidth(context) - 40,
+        height: ResponsiveHelper.getMenuButtonHeight(context) * 2.5, // GLEICHE HÖHE WIE TIMER
+        decoration: BoxDecoration(
+          color: AppTheme.colors.mainBackground2,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (!isFinished) ...[
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    phaseText,
+                    style: AppStyles.labelStyle(context).copyWith(
+                      fontSize: ResponsiveHelper.getLabelFontSize(context) * 0.6, // Kleinere Phase-Anzeige
+                      color: AppTheme.colors.mainTextColor,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                SizedBox(height: 4), // Weniger Abstand
+              ],
+
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    displayText,
+                    style: isFinished
+                        ? AppStyles.buttonStyle(context).copyWith(
+                      fontSize: ResponsiveHelper.getTitleFontSize(context) * 0.6,
+                      color: AppTheme.colors.mainTextColor,
+                      fontWeight: FontWeight.normal,
+                    )
+                        : AppStyles.fieldStyle(context).copyWith(
+                      fontSize: ResponsiveHelper.getTitleFontSize(context) * 1.2, // GLEICHE GRÖSSE WIE TIMER
+                      color: AppTheme.colors.mainTextColor,
+                      fontWeight: FontWeight.normal,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.visible,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -708,7 +1094,6 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: AppTheme.colors.mainBackground,
       body: Stack(
         children: [
-          // Hintergrund - Katzenbaum
           Positioned(
             bottom: 50,
             left: 0,
@@ -722,19 +1107,19 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Mimi Katze - reagiert auf Timer
+          // Mimi Katze - reagiert auf Timer UND Pomodoro
           Positioned(
-            bottom: GlobalTimer.isRunning ? 160 : 130, // Position anpassen für mimiSit
-            left: GlobalTimer.isRunning ? 130 : 120, // Position anpassen für mimiSit
+            bottom: (GlobalTimer.isRunning || GlobalPomodoroTimer.isRunning) ? 160 : 130,
+            left: (GlobalTimer.isRunning || GlobalPomodoroTimer.isRunning) ? 130 : 120,
             right: 0,
             child: Transform.scale(
               scaleX: -1,
               child: GestureDetector(
                 onTap: () {
-                  print('🐱 Mimi getappt - Timer läuft: ${GlobalTimer.isRunning}');
+                  print('🐱 Mimi getappt - Timer läuft: ${GlobalTimer.isRunning}, Pomodoro läuft: ${GlobalPomodoroTimer.isRunning}');
                 },
                 child: Image.asset(
-                  GlobalTimer.isRunning ? 'assets/images/mimiSit.png' : 'assets/images/mimiSleep.png',
+                  (GlobalTimer.isRunning || GlobalPomodoroTimer.isRunning) ? 'assets/images/mimiSit.png' : 'assets/images/mimiSleep.png',
                   width: 160,
                   height: 160,
                 ),
@@ -742,15 +1127,15 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Plum Katze - reagiert auf Timer finished
+          // Plum Katze - reagiert auf Timer finished ODER Pomodoro finished
           Positioned(
-            bottom: GlobalTimer.isFinished ? 360 : 328, // Position anpassen für plumSit
-            left: GlobalTimer.isFinished ? 90 : 115, // Position anpassen für plumSit
+            bottom: (GlobalTimer.isFinished || GlobalPomodoroTimer.allCyclesCompleted) ? 360 : 328,
+            left: (GlobalTimer.isFinished || GlobalPomodoroTimer.allCyclesCompleted) ? 90 : 115,
             right: 0,
             child: GestureDetector(
-              onTap: _onPlumTapped, // Plum antippen um Timer finished zu clearen
+              onTap: _onPlumTapped,
               child: Image.asset(
-                GlobalTimer.isFinished ? 'assets/images/plumSit.png' : 'assets/images/plumSleep.png',
+                (GlobalTimer.isFinished || GlobalPomodoroTimer.allCyclesCompleted) ? 'assets/images/plumSit.png' : 'assets/images/plumSleep.png',
                 width: 160,
                 height: 160,
               ),
@@ -768,20 +1153,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   MaterialPageRoute(builder: (context) => MenuScreen()),
                 );
                 await _loadUserTheme();
-                // Callbacks nach Rückkehr neu setzen
                 _setupTimerCallbacks();
+                _setupPomodoroCallbacks();
               },
             ),
           ),
 
-          // Timer Display zwischen Menü und Grafiken
+          // Timer/Pomodoro Display zwischen Menü und Grafiken
           Positioned(
             top: MediaQuery.of(context).size.height * 0.17,
             left: 20,
             right: 20,
-            child: _buildTimerDisplay(),
+            child: Column(
+              children: [
+                _buildTimerDisplay(),
+                if ((GlobalTimer.isRunning || GlobalTimer.isFinished) &&
+                    (GlobalPomodoroTimer.isRunning || GlobalPomodoroTimer.allCyclesCompleted))
+                  SizedBox(height: 10),
+                _buildPomodoroDisplay(),
+              ],
+            ),
           ),
-
         ],
       ),
     );
@@ -870,8 +1262,9 @@ class _MenuScreenState extends State<MenuScreen> {
                       AppWidgets.menuButton(
                         text: 'POMODORO-TIMER',
                         onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Pomodoro-Timer - Coming Soon!')),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => PomodoroScreen()),
                           );
                         },
                         context: context,
@@ -1674,6 +2067,425 @@ class _TimerScreenState extends State<TimerScreen> {
   void dispose() {
     _repeatTimer?.cancel();
     // NICHT GlobalTimer.dispose() - da er global bleiben soll!
+    super.dispose();
+  }
+}
+//#endregion
+
+//#region PomodoroScreen
+class PomodoroScreen extends StatefulWidget {
+  @override
+  _PomodoroScreenState createState() => _PomodoroScreenState();
+}
+
+class _PomodoroScreenState extends State<PomodoroScreen> {
+  bool _themeLoaded = false;
+  Timer? _repeatTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserTheme();
+    _setupPomodoroCallbacks();
+  }
+
+  Future<void> _loadUserTheme() async {
+    await AppTheme.loadUserTheme();
+    setState(() {
+      _themeLoaded = true;
+    });
+  }
+
+  void _setupPomodoroCallbacks() {
+    GlobalPomodoroTimer.setCallbacks(
+      onUpdate: () {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+      onFinished: () {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+      onPhaseChange: () {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+    );
+  }
+
+  void _startRepeating(VoidCallback action) {
+    action();
+    _repeatTimer = Timer.periodic(Duration(milliseconds: 150), (timer) {
+      action();
+    });
+  }
+
+  void _stopRepeating() {
+    _repeatTimer?.cancel();
+    _repeatTimer = null;
+  }
+
+  // Vereinfachte Eingabe mit Button-Breite und mehr Höhe
+  Widget _buildTimeInput(String label, int currentValue, VoidCallback onTap) {
+    return Container(
+      width: ResponsiveHelper.getMaxWidth(context) - 40, // GLEICHE BREITE WIE BUTTONS
+      margin: EdgeInsets.symmetric(vertical: 5), // WENIGER ABSTAND
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start, // LINKSBÜNDIG
+        children: [
+          Text(
+            label,
+            style: AppStyles.labelStyle(context).copyWith(
+              fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.1, // GRÖSSERE ÜBERSCHRIFT
+            ),
+          ),
+          SizedBox(height: 5), // WENIGER ABSTAND
+          GestureDetector(
+            onTap: onTap,
+            child: Container(
+              height: ResponsiveHelper.getMenuButtonHeight(context) * 1.3, // HÖHER
+              decoration: BoxDecoration(
+                color: AppTheme.colors.mainBackground2,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: Text(
+                  '${currentValue.toString().padLeft(2, '0')}:00',
+                  style: AppStyles.fieldStyle(context).copyWith(
+                    fontSize: ResponsiveHelper.getTitleFontSize(context) * 1.0, // GRÖSSERE SCHRIFT
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCounterInput(String label, int currentValue, Function(int) onChanged, {int min = 1, int max = 10}) {
+    return Container(
+      width: ResponsiveHelper.getMaxWidth(context) - 40, // GLEICHE BREITE WIE BUTTONS
+      margin: EdgeInsets.symmetric(vertical: 5), // WENIGER ABSTAND
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start, // LINKSBÜNDIG
+        children: [
+          Text(
+            label,
+            style: AppStyles.labelStyle(context).copyWith(
+              fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.1, // GRÖSSERE ÜBERSCHRIFT
+            ),
+          ),
+          SizedBox(height: 5), // WENIGER ABSTAND
+          Container(
+            height: ResponsiveHelper.getMenuButtonHeight(context) * 1.3, // HÖHER
+            decoration: BoxDecoration(
+              color: AppTheme.colors.mainBackground2,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                GestureDetector(
+                  onTap: currentValue > min ? () => onChanged(currentValue - 1) : null,
+                  onLongPressStart: currentValue > min ? (_) => _startRepeating(() {
+                    if (currentValue > min) onChanged(currentValue - 1);
+                  }) : null,
+                  onLongPressEnd: (_) => _stopRepeating(),
+                  child: Container(
+                    padding: EdgeInsets.all(12),
+                    child: Icon(
+                      Icons.remove,
+                      color: currentValue > min ? AppTheme.colors.mainTextColor : AppTheme.colors.mainTextColor.withOpacity(0.3),
+                      size: ResponsiveHelper.getLabelFontSize(context) * 1.2, // GRÖSSERE ICONS
+                    ),
+                  ),
+                ),
+                Text(
+                  '${currentValue}', // OHNE x
+                  style: AppStyles.fieldStyle(context).copyWith(
+                    fontSize: ResponsiveHelper.getTitleFontSize(context) * 1.0, // GRÖSSERE SCHRIFT
+                  ),
+                ),
+                GestureDetector(
+                  onTap: currentValue < max ? () => onChanged(currentValue + 1) : null,
+                  onLongPressStart: currentValue < max ? (_) => _startRepeating(() {
+                    if (currentValue < max) onChanged(currentValue + 1);
+                  }) : null,
+                  onLongPressEnd: (_) => _stopRepeating(),
+                  child: Container(
+                    padding: EdgeInsets.all(12),
+                    child: Icon(
+                      Icons.add,
+                      color: currentValue < max ? AppTheme.colors.mainTextColor : AppTheme.colors.mainTextColor.withOpacity(0.3),
+                      size: ResponsiveHelper.getLabelFontSize(context) * 1.2, // GRÖSSERE ICONS
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTimeSetDialog(String title, int currentMinutes, Function(int) onSet) {
+    if (GlobalPomodoroTimer.isRunning) return;
+
+    int tempMinutes = currentMinutes;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppTheme.colors.mainBackground,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+              title: Text(
+                title,
+                style: AppStyles.labelStyle(context).copyWith(
+                  fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.3,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              content: Container(
+                height: 80,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'MINUTEN',
+                      style: AppStyles.labelStyle(context).copyWith(
+                        fontSize: ResponsiveHelper.getLabelFontSize(context) * 0.9,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            setDialogState(() {
+                              tempMinutes = tempMinutes > 1 ? tempMinutes - 1 : 1;
+                            });
+                          },
+                          onLongPressStart: (_) => _startRepeating(() {
+                            setDialogState(() {
+                              tempMinutes = tempMinutes > 1 ? tempMinutes - 1 : 1;
+                            });
+                          }),
+                          onLongPressEnd: (_) => _stopRepeating(),
+                          child: Container(
+                            padding: EdgeInsets.all(8),
+                            child: Icon(Icons.remove, color: AppTheme.colors.mainTextColor),
+                          ),
+                        ),
+                        Container(
+                          width: 60,
+                          child: Text(
+                            tempMinutes.toString().padLeft(2, '0'),
+                            style: AppStyles.fieldStyle(context).copyWith(fontSize: 23),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            setDialogState(() {
+                              tempMinutes = tempMinutes < 60 ? tempMinutes + 1 : 60;
+                            });
+                          },
+                          onLongPressStart: (_) => _startRepeating(() {
+                            setDialogState(() {
+                              tempMinutes = tempMinutes < 60 ? tempMinutes + 1 : 60;
+                            });
+                          }),
+                          onLongPressEnd: (_) => _stopRepeating(),
+                          child: Container(
+                            padding: EdgeInsets.all(8),
+                            child: Icon(Icons.add, color: AppTheme.colors.mainTextColor),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      onSet(tempMinutes);
+                      Navigator.pop(context);
+                    },
+                    style: AppStyles.getElevatedButtonStyle(),
+                    child: Text(
+                      'OK',
+                      style: AppStyles.buttonStyle(context),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_themeLoaded) {
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppTheme.colors.mainBackground,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              padding: EdgeInsets.all(10),
+              child: Text(
+                'POMODORO',
+                style: AppStyles.titleStyle(context).copyWith(
+                  fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.8,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
+            Expanded(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 40), // GLEICHE PADDING WIE TIMER
+                  child: Column(
+                    children: [
+                      SizedBox(height: 10),
+
+                      _buildTimeInput(
+                        'ARBEITSZEIT',
+                        GlobalPomodoroTimer.workTimeMinutes,
+                            () => _showTimeSetDialog(
+                          'ARBEITSZEIT EINSTELLEN',
+                          GlobalPomodoroTimer.workTimeMinutes,
+                              (minutes) => setState(() {
+                            GlobalPomodoroTimer.setWorkTime(minutes);
+                          }),
+                        ),
+                      ),
+
+                      SizedBox(height: 10), // WENIGER ABSTAND
+
+                      _buildCounterInput(
+                        'DURCHGÄNGE',
+                        GlobalPomodoroTimer.totalCycles,
+                            (value) => setState(() {
+                          GlobalPomodoroTimer.setTotalCycles(value);
+                        }),
+                        min: 1,
+                        max: 10,
+                      ),
+
+                      SizedBox(height: 10), // WENIGER ABSTAND
+
+                      _buildTimeInput(
+                        'KURZE PAUSE',
+                        GlobalPomodoroTimer.shortBreakMinutes,
+                            () => _showTimeSetDialog(
+                          'KURZE PAUSE EINSTELLEN',
+                          GlobalPomodoroTimer.shortBreakMinutes,
+                              (minutes) => setState(() {
+                            GlobalPomodoroTimer.setShortBreak(minutes);
+                          }),
+                        ),
+                      ),
+
+                      SizedBox(height: 10), // WENIGER ABSTAND
+
+                      _buildTimeInput(
+                        'LANGE PAUSE',
+                        GlobalPomodoroTimer.longBreakMinutes,
+                            () => _showTimeSetDialog(
+                          'LANGE PAUSE EINSTELLEN',
+                          GlobalPomodoroTimer.longBreakMinutes,
+                              (minutes) => setState(() {
+                            GlobalPomodoroTimer.setLongBreak(minutes);
+                          }),
+                        ),
+                      ),
+
+                      SizedBox(height: 10), // WENIGER ABSTAND
+
+                      _buildCounterInput(
+                        'LANGE PAUSE NACH',
+                        GlobalPomodoroTimer.longBreakAfter,
+                            (value) => setState(() {
+                          GlobalPomodoroTimer.setLongBreakAfter(value);
+                        }),
+                        min: 2,
+                        max: 8,
+                      ),
+
+                      SizedBox(height: 25), // WENIGER ABSTAND VOR BUTTONS
+
+                      // BUTTONS GENAU WIE BEIM TIMER
+                      AppWidgets.menuButton(
+                        text: GlobalPomodoroTimer.isRunning ? 'PAUSE' : 'START',
+                        onPressed: () {
+                          GlobalPomodoroTimer.toggleTimer();
+                        },
+                        context: context,
+                      ),
+
+                      SizedBox(height: 15),
+
+                      AppWidgets.menuButton(
+                        text: 'RESET',
+                        onPressed: () {
+                          GlobalPomodoroTimer.resetTimer();
+                        },
+                        context: context,
+                      ),
+
+                      SizedBox(height: 15),
+
+                      AppWidgets.menuButton(
+                        text: 'NEU',
+                        onPressed: () {
+                          GlobalPomodoroTimer.newTimer();
+                        },
+                        context: context,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            Padding(
+              padding: EdgeInsets.all(10),
+              child: AppWidgets.pawButton(
+                onPressed: () => Navigator.pop(context),
+                isBackButton: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _repeatTimer?.cancel();
     super.dispose();
   }
 }
