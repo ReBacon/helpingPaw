@@ -86,12 +86,15 @@ class AppTheme {
   }
 
   // Lädt User-Theme (nach Authentifizierung)
+  // Ersetze die loadUserTheme Methode in style.dart mit dieser Version:
+
+// Lädt User-Theme (nach Authentifizierung) - OHNE Theme-Collection-Zugriff
   static Future<void> loadUserTheme() async {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser == null) {
-        print('⚠️ Kein authentifizierter User - lade Turquoise Theme');
-        await loadTurquoiseTheme();
+        print('⚠️ Kein authentifizierter User - verwende Default Theme');
+        _colors = ThemeColors.defaultColors;
         return;
       }
 
@@ -110,34 +113,68 @@ class AppTheme {
         if (themeID != null) {
           print('🎨 User Theme ID: $themeID');
 
-          // Hole Theme basierend auf themeID
-          DocumentSnapshot themeDoc = await FirebaseFirestore.instance
-              .collection('theme')
-              .doc(themeID)
-              .get();
-
-          if (themeDoc.exists) {
-            Map<String, dynamic> themeData = themeDoc.data() as Map<String, dynamic>;
-            _colors = ThemeColors(
-              mainBackground: _parseColor(themeData['background'], const Color(0xFFC7F0EC)),
-              mainBackground2: _parseColor(themeData['background2'], const Color(0xFF88D1CA)),
-              mainTextColor: _parseColor(themeData['textColor'], const Color(0xFF40615F)),
-            );
-            print('✅ User Theme ($themeID) erfolgreich geladen');
-            return;
+          // Verwende hardcoded Theme-Farben basierend auf themeID
+          switch (themeID) {
+            case 'turquoise':
+              _colors = const ThemeColors(
+                mainBackground: Color(0xFFC7F0EC),
+                mainBackground2: Color(0xFF88D1CA),
+                mainTextColor: Color(0xFF40615F),
+              );
+              break;
+            case 'lavender':
+              _colors = const ThemeColors(
+                mainBackground: Color(0xFFE0D7EF),
+                mainBackground2: Color(0xFFB8A6D9),
+                mainTextColor: Color(0xFF483371),
+              );
+              break;
+            case 'peach':
+              _colors = const ThemeColors(
+                mainBackground: Color(0xFFFFE8D6),
+                mainBackground2: Color(0xFFFFCBA4),
+                mainTextColor: Color(0xFF8A512E),
+              );
+              break;
+            case 'skyblue':
+              _colors = const ThemeColors(
+                mainBackground: Color(0xFFD6E8F4),
+                mainBackground2: Color(0xFFA4C8E9),
+                mainTextColor: Color(0xFF1F4567),
+              );
+              break;
+            case 'leaf':
+              _colors = const ThemeColors(
+                mainBackground: Color(0xFFD2F0CD),
+                mainBackground2: Color(0xFFA3D9A1),
+                mainTextColor: Color(0xFF224E23),
+              );
+              break;
+            case 'rose':
+              _colors = const ThemeColors(
+                mainBackground: Color(0xFFF9E4EB),
+                mainBackground2: Color(0xFFECC8D3),
+                mainTextColor: Color(0xFF653144),
+              );
+              break;
+            default:
+              _colors = ThemeColors.defaultColors;
           }
+          print('✅ User Theme ($themeID) erfolgreich geladen');
+          return;
         }
       }
 
-      // Fallback zu Turquoise wenn User-Theme nicht gefunden
-      print('⚠️ User Theme nicht gefunden - lade Turquoise Theme');
-      await loadTurquoiseTheme();
+      // Fallback zu Default wenn User-Theme nicht gefunden
+      print('⚠️ User Theme nicht gefunden - verwende Default Theme');
+      _colors = ThemeColors.defaultColors;
     } catch (e) {
       print('❌ Fehler beim Laden des User-Themes: $e');
-      print('🔄 Fallback zu Turquoise Theme');
-      await loadTurquoiseTheme();
+      print('🔄 Fallback zu Default Theme');
+      _colors = ThemeColors.defaultColors;
     }
   }
+
 
   static void updateColors(ThemeColors newColors) {
     _colors = newColors;

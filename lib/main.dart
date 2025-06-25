@@ -493,7 +493,6 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  String _errorMessage = '';
   bool _themeLoaded = false;
 
   @override
@@ -516,6 +515,66 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
+    // 1. Alle Felder ausgefüllt?
+    if (_emailController.text.trim().isEmpty || _passwordController.text.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            backgroundColor: AppTheme.colors.mainBackground,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            content: Text(
+              '📝 Bitte fülle alle Felder aus!',
+              style: AppStyles.fieldStyle(context),
+              textAlign: TextAlign.center,
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: AppStyles.getElevatedButtonStyle(),
+                  child: Text('OK', style: AppStyles.buttonStyle(context)),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    // 2. E-Mail Format prüfen
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+    if (!emailRegex.hasMatch(_emailController.text.trim())) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            backgroundColor: AppTheme.colors.mainBackground,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            content: Text(
+              '📧 Bitte gib eine gültige E-Mail-Adresse ein!',
+              style: AppStyles.fieldStyle(context),
+              textAlign: TextAlign.center,
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: AppStyles.getElevatedButtonStyle(),
+                  child: Text('OK', style: AppStyles.buttonStyle(context)),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    // 3. Login versuchen
     try {
       UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
@@ -523,13 +582,47 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (userCredential.user != null) {
+        // Theme laden nach erfolgreichem Login
         await AppTheme.loadUserTheme();
         setState(() {});
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Login fehlgeschlagen: ${e.toString()}';
-      });
+      print('⚠️ Login Fehler: $e');
+
+      // Prüfen ob User trotz Error eingeloggt ist
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        print('✅ User ist trotz Error eingeloggt - UID: ${currentUser.uid}');
+        // Theme laden nach erfolgreichem Login
+        await AppTheme.loadUserTheme();
+        setState(() {});
+      } else {
+        // 4. Echter Login-Fehler (E-Mail/Passwort falsch)
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              backgroundColor: AppTheme.colors.mainBackground,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              content: Text(
+                '🔐 E-Mail oder Passwort ist falsch. Bitte versuche es nochmal!',
+                style: AppStyles.fieldStyle(context),
+                textAlign: TextAlign.center,
+              ),
+              actions: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: AppStyles.getElevatedButtonStyle(),
+                    child: Text('OK', style: AppStyles.buttonStyle(context)),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      }
     }
   }
 
@@ -613,27 +706,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-              if (_errorMessage.isNotEmpty) ...[
-                SizedBox(height: 20),
-                Container(
-                  constraints: BoxConstraints(maxWidth: ResponsiveHelper.getMaxWidth(context)),
-                  margin: EdgeInsets.symmetric(horizontal: 20),
-                  padding: EdgeInsets.all(10),
-                  decoration: AppStyles.getErrorBoxDecoration(),
-                  child: Text(
-                    _errorMessage,
-                    style: AppStyles.fieldStyle(context).copyWith(color: Colors.red[800]),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
+              // KEINE rote Fehlerbox mehr! 🎉
             ],
           ),
         ),
       ),
     );
   }
-
   @override
   void dispose() {
     _emailController.dispose();
@@ -676,52 +755,267 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _register() async {
-    if (_passwordController.text != _confirmPasswordController.text) {
-      setState(() {
-        _errorMessage = 'Passwörter stimmen nicht überein';
-      });
+
+    // 1. Alle Felder ausgefüllt?
+    if (_emailController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty ||
+        _confirmPasswordController.text.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            backgroundColor: AppTheme.colors.mainBackground,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            content: Text(
+              '📝 Bitte fülle alle Felder aus!',
+              style: AppStyles.fieldStyle(context),
+              textAlign: TextAlign.center,
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: AppStyles.getElevatedButtonStyle(),
+                  child: Text('OK', style: AppStyles.buttonStyle(context)),
+                ),
+              ),
+            ],
+          );
+        },
+      );
       return;
     }
 
-    try {
-      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-
-      if (userCredential.user != null) {
-        await Future.delayed(Duration(milliseconds: 500));
-
-        try {
-          Map<String, dynamic> userData = {
-            'email': _emailController.text.trim(),
-            'themeID': 'turquoise',
-            'notificationsEnabled': true,
-            'soundEnabled': true,
-            'createdAt': FieldValue.serverTimestamp(),
-          };
-
-          await FirebaseFirestore.instance
-              .collection('user')
-              .doc(userCredential.user!.uid)
-              .set(userData);
-
-          await AppTheme.loadUserTheme();
-
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => HomeScreen()),
-                (Route<dynamic> route) => false,
+    // 2. E-Mail Format prüfen
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+    if (!emailRegex.hasMatch(_emailController.text.trim())) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            backgroundColor: AppTheme.colors.mainBackground,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            content: Text(
+              '📧 Bitte gib eine gültige E-Mail-Adresse ein!',
+              style: AppStyles.fieldStyle(context),
+              textAlign: TextAlign.center,
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: AppStyles.getElevatedButtonStyle(),
+                  child: Text('OK', style: AppStyles.buttonStyle(context)),
+                ),
+              ),
+            ],
           );
-        } catch (firestoreError) {
-          setState(() {
-            _errorMessage = 'Firestore Fehler: ${firestoreError.toString()}';
-          });
+        },
+      );
+      return;
+    }
+
+    // 3. Passwort Länge prüfen
+    if (_passwordController.text.length < 6) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            backgroundColor: AppTheme.colors.mainBackground,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            content: Text(
+              '🔑 Das Passwort muss mindestens 6 Zeichen lang sein!',
+              style: AppStyles.fieldStyle(context),
+              textAlign: TextAlign.center,
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: AppStyles.getElevatedButtonStyle(),
+                  child: Text('OK', style: AppStyles.buttonStyle(context)),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    // 4. Passwörter stimmen überein? (dein bereits vorhandener Code)
+    if (_passwordController.text != _confirmPasswordController.text) {
+      // ... dein vorhandener Code ...
+    }
+
+    if (_passwordController.text != _confirmPasswordController.text) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            backgroundColor: AppTheme.colors.mainBackground,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15)),
+            content: Text(
+              '🔒 Die Passwörter stimmen nicht überein!',
+              style: AppStyles.fieldStyle(context),
+              textAlign: TextAlign.center,
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: AppStyles.getElevatedButtonStyle(),
+                  child: Text('OK', style: AppStyles.buttonStyle(context)),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    setState(() {
+      _errorMessage = '';
+    });
+
+    try {
+      print('🔧 Starte Registrierung für: ${_emailController.text.trim()}');
+
+      // Loading Dialog anzeigen
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              content: Row(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(width: 20),
+                  Text("Registrierung läuft..."),
+                ],
+              ),
+            );
+          },
+        );
+      }
+
+      // 1. Firebase Auth User erstellen
+      UserCredential? userCredential;
+      String? uid;
+
+      try {
+        userCredential =
+        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
+        uid = userCredential.user?.uid;
+        print('✅ Firebase Auth erfolgreich - UID: $uid');
+      } catch (authError) {
+        // Falls Cast-Fehler in Firebase Auth - User ist trotzdem erstellt!
+        print('⚠️ Firebase Auth Cast-Fehler (ignoriert): $authError');
+
+        // Hole den aktuell eingeloggten User
+        final currentUser = FirebaseAuth.instance.currentUser;
+        if (currentUser != null) {
+          uid = currentUser.uid;
+          print('✅ User trotzdem erfolgreich erstellt - UID: $uid');
+        } else {
+          throw Exception('User konnte nicht erstellt werden');
         }
       }
+
+      if (uid != null) {
+        final String email = _emailController.text.trim();
+
+        // 2. User-Dokument erstellen
+        print('🔧 Erstelle User-Dokument für UID: $uid');
+        await FirebaseFirestore.instance
+            .collection('user')
+            .doc(uid)
+            .set({
+          'email': email,
+          'themeID': 'turquoise',
+          'notificationsEnabled': true,
+          'soundEnabled': true,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        print('✅ User-Dokument erstellt');
+
+        // 3. Todo-Dokument erstellen
+        print('🔧 Erstelle Todo-Dokument für UID: $uid');
+        await FirebaseFirestore.instance
+            .collection('todos')
+            .doc(uid)
+            .set({
+          'todoList': [],
+          'createdAt': FieldValue.serverTimestamp(),
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
+        print('✅ Todo-Dokument erstellt');
+
+        // Loading Dialog schließen
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+
+        // 4. Manuelle Navigation zum HomeScreen
+        print('🚀 Navigiere manuell zum HomeScreen...');
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => HomeScreen()),
+                (route) => false,
+          );
+        }
+        print('✅ Registrierung erfolgreich abgeschlossen!');
+      } else {
+        throw Exception('User konnte nicht erstellt werden');
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Registrierung fehlgeschlagen: ${e.toString()}';
-      });
+      print('❌ Registrierung fehlgeschlagen: $e');
+
+      // Loading Dialog schließen falls noch offen
+      if (mounted) {
+        try {
+          Navigator.of(context).pop();
+        } catch (_) {}
+      }
+
+      // Statt setState mit _errorMessage:
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              backgroundColor: AppTheme.colors.mainBackground,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15)),
+              content: Text(
+                '😿 Ups! Etwas ist schiefgelaufen. Bitte versuche es nochmal!',
+                style: AppStyles.fieldStyle(context),
+                textAlign: TextAlign.center,
+              ),
+              actions: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: AppStyles.getElevatedButtonStyle(),
+                    child: Text('OK', style: AppStyles.buttonStyle(context)),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      }
     }
   }
 
@@ -805,21 +1099,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
-              SizedBox(height: 110),
-              if (_errorMessage.isNotEmpty) ...[
-                SizedBox(height: 20),
-                Container(
-                  constraints: BoxConstraints(maxWidth: ResponsiveHelper.getMaxWidth(context)),
-                  margin: EdgeInsets.symmetric(horizontal: 20),
-                  padding: EdgeInsets.all(10),
-                  decoration: AppStyles.getErrorBoxDecoration(),
-                  child: Text(
-                    _errorMessage,
-                    style: AppStyles.fieldStyle(context).copyWith(color: Colors.red[800]),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -858,28 +1137,36 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadUserTheme() async {
-    await AppTheme.loadUserTheme();
+    if (!mounted) return; // Prüfe ob Widget noch gemounted ist
 
     try {
+      print('🎨 HomeScreen: Lade User Theme...');
+      await AppTheme.loadUserTheme();
+
       User? currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser != null) {
+      if (currentUser != null && mounted) {
         DocumentSnapshot userDoc = await FirebaseFirestore.instance
             .collection('user')
             .doc(currentUser.uid)
             .get();
 
-        if (userDoc.exists) {
+        if (userDoc.exists && mounted) {
           Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
           _selectedTheme = userData['themeID'] ?? 'turquoise';
+          print('🎨 Theme ID gefunden: $_selectedTheme');
         }
       }
     } catch (e) {
-      print('Fehler beim Laden der Theme-ID: $e');
+      print('❌ Fehler beim Laden der Theme-ID: $e');
+      _selectedTheme = 'turquoise'; // Fallback
     }
 
-    setState(() {
-      _themeLoaded = true;
-    });
+    if (mounted) {
+      setState(() {
+        _themeLoaded = true;
+      });
+      print('✅ HomeScreen Theme Loading abgeschlossen');
+    }
   }
 
   void _setupTimerCallbacks() {
@@ -1273,8 +1560,9 @@ class _MenuScreenState extends State<MenuScreen> {
                       AppWidgets.menuButton(
                         text: 'TODO-LISTE',
                         onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Todo-Liste - Coming Soon!')),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => TodoListScreen()),
                           );
                         },
                         context: context,
@@ -1362,29 +1650,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'textColor': Color(0xFF40615F),
     },
     'lavender': {
-      'background2': Color(0xFFB19CD9),
-      'background': Color(0xFFE6E0F0),
-      'textColor': Color(0xFF5D4E75),
+      'background2': Color(0xFFB8A6D9),
+      'background': Color(0xFFE0D7EF),
+      'textColor': Color(0xFF483371),
     },
     'peach': {
-      'background2': Color(0xFFFFB085),
-      'background': Color(0xFFFFE4D6),
-      'textColor': Color(0xFF8B4513),
+      'background2': Color(0xFFFFCBA4),
+      'background': Color(0xFFFFE8D6),
+      'textColor': Color(0xFF8A512E),
     },
     'skyblue': {
-      'background2': Color(0xFF87CEEB),
-      'background': Color(0xFFE0F6FF),
-      'textColor': Color(0xFF2F4F8F),
+      'background2': Color(0xFFA4C8E9),
+      'background': Color(0xFFD6E8F4),
+      'textColor': Color(0xFF1F4567),
     },
-    'mint': {
-      'background2': Color(0xFF98FB98),
-      'background': Color(0xFFE8FFE8),
-      'textColor': Color(0xFF2E8B57),
+    'leaf': {
+      'background2': Color(0xFFA3D9A1),
+      'background': Color(0xFFD2F0CD),
+      'textColor': Color(0xFF224E23),
     },
     'rose': {
-      'background2': Color(0xFFFFB6C1),
-      'background': Color(0xFFFFE4E1),
-      'textColor': Color(0xFF8B4A6B),
+      'background2': Color(0xFFECC8D3),
+      'background': Color(0xFFF9E4EB),
+      'textColor': Color(0xFF653144),
     },
   };
 
@@ -1590,7 +1878,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
                               _buildThemePreview('skyblue'),
-                              _buildThemePreview('mint'),
+                              _buildThemePreview('leaf'),
                               _buildThemePreview('rose'),
                             ],
                           ),
@@ -2490,3 +2778,336 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
   }
 }
 //#endregion
+
+//region ToDoScreen
+class TodoListScreen extends StatefulWidget {
+  @override
+  _TodoListScreenState createState() => _TodoListScreenState();
+}
+
+class _TodoListScreenState extends State<TodoListScreen> {
+  bool _themeLoaded = false;
+  final TextEditingController _todoController = TextEditingController();
+  List<Map<String, dynamic>> _todos = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserTheme();
+    _loadTodos();
+  }
+
+  Future<void> _loadUserTheme() async {
+    await AppTheme.loadUserTheme();
+    setState(() {
+      _themeLoaded = true;
+    });
+  }
+
+  Future<void> _loadTodos() async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        DocumentSnapshot todoDoc = await FirebaseFirestore.instance
+            .collection('todos')
+            .doc(currentUser.uid)
+            .get();
+
+        if (todoDoc.exists) {
+          Map<String, dynamic> todoData = todoDoc.data() as Map<String, dynamic>;
+          List<dynamic> todoList = todoData['todoList'] ?? [];
+
+          setState(() {
+            _todos = todoList.map((todo) => {
+              'id': todo['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              'text': todo['text'] ?? '',
+              'completed': todo['completed'] ?? false,
+              'createdAt': todo['createdAt'] ?? DateTime.now().millisecondsSinceEpoch,
+            }).toList();
+            _isLoading = false;
+          });
+        } else {
+          // Dokument existiert nicht, erstelle es
+          await FirebaseFirestore.instance
+              .collection('todos')
+              .doc(currentUser.uid)
+              .set({
+            'todoList': [],
+            'createdAt': FieldValue.serverTimestamp(),
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+          setState(() {
+            _todos = [];
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('Fehler beim Laden der Todos: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _saveTodos() async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        await FirebaseFirestore.instance
+            .collection('todos')
+            .doc(currentUser.uid)
+            .update({
+          'todoList': _todos,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      print('Fehler beim Speichern der Todos: $e');
+    }
+  }
+
+  void _addTodo() {
+    String todoText = _todoController.text.trim();
+    if (todoText.isNotEmpty && todoText.length <= 50) {
+      setState(() {
+        _todos.add({
+          'id': DateTime.now().millisecondsSinceEpoch.toString(),
+          'text': todoText,
+          'completed': false,
+          'createdAt': DateTime.now().millisecondsSinceEpoch,
+        });
+      });
+      _todoController.clear();
+      _saveTodos();
+    } else if (todoText.length > 50) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Maximale Länge: 50 Zeichen'),
+          backgroundColor: AppTheme.colors.mainBackground2,
+        ),
+      );
+    }
+  }
+
+  void _removeTodo(String todoId) {
+    setState(() {
+      _todos.removeWhere((todo) => todo['id'] == todoId);
+    });
+    _saveTodos();
+  }
+
+  void _toggleTodo(String todoId) {
+    setState(() {
+      int index = _todos.indexWhere((todo) => todo['id'] == todoId);
+      if (index != -1) {
+        _todos[index]['completed'] = !_todos[index]['completed'];
+      }
+    });
+    _saveTodos();
+  }
+
+  Widget _buildTodoItem(Map<String, dynamic> todo) {
+    bool isCompleted = todo['completed'] ?? false;
+    String todoText = todo['text'] ?? '';
+
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 40, vertical: 5),
+      child: Row(
+        children: [
+          // Todo Text (klickbar)
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _toggleTodo(todo['id']),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppTheme.colors.mainBackground2,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  todoText,
+                  style: AppStyles.fieldStyle(context).copyWith(
+                    fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.0,
+                    color: isCompleted
+                        ? AppTheme.colors.mainBackground  // Gleiche Farbe wie Hintergrund
+                        : AppTheme.colors.mainTextColor,
+                    decoration: isCompleted
+                        ? TextDecoration.lineThrough
+                        : TextDecoration.none,
+                    decorationColor: AppTheme.colors.mainBackground,
+                    decorationThickness: 2,
+                  ),
+                  maxLines: null, // Erlaubt mehrzeilige Darstellung
+                  overflow: TextOverflow.visible,
+                ),
+              ),
+            ),
+          ),
+
+          SizedBox(width: 10),
+
+          // Löschen Button
+          GestureDetector(
+            onTap: () => _removeTodo(todo['id']),
+            child: Container(
+              width: 45,
+              height: 45,
+              decoration: BoxDecoration(
+                color: AppTheme.colors.mainBackground2,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.remove,
+                  color: AppTheme.colors.mainTextColor,
+                  size: ResponsiveHelper.getLabelFontSize(context) * 1.5,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_themeLoaded) {
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppTheme.colors.mainBackground,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: EdgeInsets.all(10),
+              child: Text(
+                'TODO-LISTE',
+                style: AppStyles.titleStyle(context).copyWith(
+                  fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.8,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
+            // Input Bereich
+            Container(
+              margin: EdgeInsets.symmetric(horizontal: 40, vertical: 10),
+              child: Row(
+                children: [
+                  // Text Input
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: TextField(
+                        controller: _todoController,
+                        maxLength: 50,
+                        decoration: InputDecoration(
+                          hintText: 'Neue Aufgabe eingeben...',
+                          hintStyle: AppStyles.fieldStyle(context).copyWith(
+                            color: AppTheme.colors.mainTextColor.withOpacity(0.6),
+                            fontSize: ResponsiveHelper.getLabelFontSize(context) * 0.9,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+                          counterText: '', // Versteckt den Zeichenzähler
+                        ),
+                        style: AppStyles.fieldStyle(context).copyWith(
+                          color: AppTheme.colors.mainTextColor,
+                          fontSize: ResponsiveHelper.getLabelFontSize(context) * 0.9,
+                        ),
+                        onSubmitted: (_) => _addTodo(),
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(width: 10),
+
+                  // Add Button
+                  GestureDetector(
+                    onTap: _addTodo,
+                    child: Container(
+                      width: 45,
+                      height: 45,
+                      decoration: BoxDecoration(
+                        color: AppTheme.colors.mainBackground2,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Icon(
+                          Icons.add,
+                          color: AppTheme.colors.mainTextColor,
+                          size: ResponsiveHelper.getLabelFontSize(context) * 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Todo Liste
+            Expanded(
+              child: _isLoading
+                  ? Center(child: CircularProgressIndicator())
+                  : _todos.isEmpty
+                  ? Center(
+                child: Text(
+                  'Keine Aufgaben vorhanden\nFüge deine erste Aufgabe hinzu! 🐾',
+                  style: AppStyles.labelStyle(context).copyWith(
+                    fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.0,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              )
+                  : ListView.builder(
+                itemCount: _todos.length,
+                itemBuilder: (context, index) {
+                  // Sortiere Todos: unerledigte zuerst, dann erledigte
+                  List<Map<String, dynamic>> sortedTodos = List.from(_todos);
+                  sortedTodos.sort((a, b) {
+                    bool aCompleted = a['completed'] ?? false;
+                    bool bCompleted = b['completed'] ?? false;
+                    if (aCompleted == bCompleted) {
+                      // Bei gleichem Status: nach Erstellungsdatum sortieren
+                      return (b['createdAt'] ?? 0).compareTo(a['createdAt'] ?? 0);
+                    }
+                    return aCompleted ? 1 : -1; // Unerledigte zuerst
+                  });
+
+                  return _buildTodoItem(sortedTodos[index]);
+                },
+              ),
+            ),
+
+            // Zurück Button
+            Padding(
+              padding: EdgeInsets.all(10),
+              child: AppWidgets.pawButton(
+                onPressed: () => Navigator.pop(context),
+                isBackButton: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _todoController.dispose();
+    super.dispose();
+  }
+}
+//endregion
