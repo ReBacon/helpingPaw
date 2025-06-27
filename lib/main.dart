@@ -7,6 +7,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'style.dart';
 import 'notification_service.dart';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
+import 'package:encrypt/encrypt.dart' as encrypt;
 
 //region x
 void main() async {
@@ -66,6 +70,131 @@ enum PomodoroPhase {
   work,
   shortBreak,
   longBreak,
+}
+//endregion
+
+//region Verschlüsselung (ENCRYPTION HELPER)
+class EncryptionHelper {
+  static encrypt.Encrypter? _encrypter;
+  static encrypt.IV? _iv;
+
+  // Verschlüsselungsschlüssel basierend auf User-UID generieren
+  static void _initializeEncryption(String userUID) {
+    // Erstelle einen konsistenten Schlüssel aus der UID
+    final keyData = sha256.convert(utf8.encode(userUID + 'helpingPaw_secret_2024')).bytes;
+    final key = encrypt.Key(Uint8List.fromList(keyData.take(32).toList())); // AES-256
+
+    // Feste IV aus UID generieren (für Konsistenz)
+    final ivData = sha256.convert(utf8.encode(userUID + 'iv_salt')).bytes;
+    _iv = encrypt.IV(Uint8List.fromList(ivData.take(16).toList())); // AES Block Size
+
+    _encrypter = encrypt.Encrypter(encrypt.AES(key));
+    print('🔐 Verschlüsselung initialisiert für User: ${userUID.substring(0, 8)}...');
+  }
+
+  // Text verschlüsseln
+  static String encryptText(String plainText, String userUID) {
+    try {
+      if (_encrypter == null || _iv == null) {
+        _initializeEncryption(userUID);
+      }
+
+      if (plainText.isEmpty) return plainText;
+
+      final encrypted = _encrypter!.encrypt(plainText, iv: _iv!);
+      return encrypted.base64;
+    } catch (e) {
+      print('❌ Verschlüsselungsfehler: $e');
+      return plainText; // Fallback: unverschlüsselt zurückgeben
+    }
+  }
+
+  // Text entschlüsseln
+  static String decryptText(String encryptedText, String userUID) {
+    try {
+      if (_encrypter == null || _iv == null) {
+        _initializeEncryption(userUID);
+      }
+
+      if (encryptedText.isEmpty) return encryptedText;
+
+      // Prüfe ob der Text bereits verschlüsselt ist (Base64 format)
+      if (!_isBase64(encryptedText)) {
+        return encryptedText; // Unverschlüsselter Text (Backward Compatibility)
+      }
+
+      final encrypted = encrypt.Encrypted.fromBase64(encryptedText);
+      final decrypted = _encrypter!.decrypt(encrypted, iv: _iv!);
+      return decrypted;
+    } catch (e) {
+      print('⚠️ Entschlüsselungsfehler: $e - Rückgabe als Klartext');
+      return encryptedText; // Fallback: Text so zurückgeben wie er ist
+    }
+  }
+
+  // Prüfe ob String Base64 ist
+  static bool _isBase64(String str) {
+    try {
+      base64.decode(str);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Todo-Liste verschlüsseln
+  static List<Map<String, dynamic>> encryptTodos(List<Map<String, dynamic>> todos, String userUID) {
+    return todos.map((todo) {
+      return {
+        'id': todo['id'],
+        'text': encryptText(todo['text'] ?? '', userUID),
+        'completed': todo['completed'],
+        'createdAt': todo['createdAt'],
+      };
+    }).toList();
+  }
+
+  // Todo-Liste entschlüsseln
+  static List<Map<String, dynamic>> decryptTodos(List<dynamic> encryptedTodos, String userUID) {
+    return encryptedTodos.map((todo) {
+      return {
+        'id': todo['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        'text': decryptText(todo['text'] ?? '', userUID),
+        'completed': todo['completed'] ?? false,
+        'createdAt': todo['createdAt'] ?? DateTime.now().millisecondsSinceEpoch,
+      };
+    }).toList();
+  }
+
+  // Notizen-Liste verschlüsseln
+  static List<Map<String, dynamic>> encryptNotes(List<Map<String, dynamic>> notes, String userUID) {
+    return notes.map((note) {
+      return {
+        'id': note['id'],
+        'title': encryptText(note['title'] ?? '', userUID),
+        'content': encryptText(note['content'] ?? '', userUID),
+        'createdAt': note['createdAt'],
+      };
+    }).toList();
+  }
+
+  // Notizen-Liste entschlüsseln
+  static List<Map<String, dynamic>> decryptNotes(List<dynamic> encryptedNotes, String userUID) {
+    return encryptedNotes.map((note) {
+      return {
+        'id': note['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        'title': decryptText(note['title'] ?? '', userUID),
+        'content': decryptText(note['content'] ?? '', userUID),
+        'createdAt': note['createdAt'] ?? DateTime.now().millisecondsSinceEpoch,
+      };
+    }).toList();
+  }
+
+  // Cleanup
+  static void dispose() {
+    _encrypter = null;
+    _iv = null;
+  }
 }
 //endregion
 
@@ -950,16 +1079,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
         print('✅ User-Dokument erstellt');
 
         // 3. Todo-Dokument erstellen
-        print('🔧 Erstelle Todo-Dokument für UID: $uid');
+        print('🔧 Erstelle verschlüsseltes Todo-Dokument für UID: $uid');
         await FirebaseFirestore.instance
             .collection('todos')
             .doc(uid)
             .set({
           'todoList': [],
+          'encrypted': true, // 🔐 MARKIERUNG FÜR VERSCHLÜSSELUNG
           'createdAt': FieldValue.serverTimestamp(),
           'lastUpdated': FieldValue.serverTimestamp(),
         });
-        print('✅ Todo-Dokument erstellt');
+        print('✅ Verschlüsseltes Todo-Dokument erstellt');
 
         // Loading Dialog schließen
         if (mounted) {
@@ -967,17 +1097,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
         }
 
         // 4. Notes-Dokument erstellen (NEU HINZUFÜGEN)
-        print('🔧 Erstelle Notes-Dokument für UID: $uid');
+        print('🔧 Erstelle verschlüsseltes Notes-Dokument für UID: $uid');
         try {
           await FirebaseFirestore.instance
               .collection('notes')
               .doc(uid)
               .set({
             'noteList': [],
+            'encrypted': true, // 🔐 MARKIERUNG FÜR VERSCHLÜSSELUNG
             'createdAt': FieldValue.serverTimestamp(),
             'lastUpdated': FieldValue.serverTimestamp(),
           });
-          print('✅ Notes-Dokument erstellt');
+          print('✅ Verschlüsseltes Notes-Dokument erstellt');
         } catch (notesError) {
           print('⚠️ Notes-Dokument Fehler (wird ignoriert): $notesError');
         }
@@ -1920,6 +2051,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: AppWidgets.menuButton(
                         text: 'LOGOUT',
                         onPressed: () async {
+                          // 🔐 Verschlüsselung cleanup beim Logout
+                          EncryptionHelper.dispose();
                           await FirebaseAuth.instance.signOut();
                           Navigator.of(context).popUntil((route) => route.isFirst);
                         },
@@ -2827,6 +2960,8 @@ class _TodoListScreenState extends State<TodoListScreen> {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
+        print('🔐 Lade verschlüsselte Todos für User: ${currentUser.uid.substring(0, 8)}...');
+
         DocumentSnapshot todoDoc = await FirebaseFirestore.instance
             .collection('todos')
             .doc(currentUser.uid)
@@ -2835,23 +2970,33 @@ class _TodoListScreenState extends State<TodoListScreen> {
         if (todoDoc.exists) {
           Map<String, dynamic> todoData = todoDoc.data() as Map<String, dynamic>;
           List<dynamic> todoList = todoData['todoList'] ?? [];
+          bool isEncrypted = todoData['encrypted'] ?? false;
 
           setState(() {
-            _todos = todoList.map((todo) => {
-              'id': todo['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-              'text': todo['text'] ?? '',
-              'completed': todo['completed'] ?? false,
-              'createdAt': todo['createdAt'] ?? DateTime.now().millisecondsSinceEpoch,
-            }).toList();
+            if (isEncrypted && todoList.isNotEmpty) {
+              // 🔐 ENTSCHLÜSSELTE TODOS LADEN
+              _todos = EncryptionHelper.decryptTodos(todoList, currentUser.uid);
+              print('✅ ${_todos.length} verschlüsselte Todos entschlüsselt');
+            } else {
+              // Legacy: Unverschlüsselte Todos (Backward Compatibility)
+              _todos = todoList.map((todo) => {
+                'id': todo['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                'text': todo['text'] ?? '',
+                'completed': todo['completed'] ?? false,
+                'createdAt': todo['createdAt'] ?? DateTime.now().millisecondsSinceEpoch,
+              }).toList();
+              print('⚠️ ${_todos.length} unverschlüsselte Todos geladen (Legacy)');
+            }
             _isLoading = false;
           });
         } else {
-          // Dokument existiert nicht, erstelle es
+          // Dokument existiert nicht, erstelle es VERSCHLÜSSELT
           await FirebaseFirestore.instance
               .collection('todos')
               .doc(currentUser.uid)
               .set({
             'todoList': [],
+            'encrypted': true, // 🔐 MARKIERUNG FÜR VERSCHLÜSSELUNG
             'createdAt': FieldValue.serverTimestamp(),
             'lastUpdated': FieldValue.serverTimestamp(),
           });
@@ -2859,10 +3004,11 @@ class _TodoListScreenState extends State<TodoListScreen> {
             _todos = [];
             _isLoading = false;
           });
+          print('✅ Neues verschlüsseltes Todo-Dokument erstellt');
         }
       }
     } catch (e) {
-      print('Fehler beim Laden der Todos: $e');
+      print('❌ Fehler beim Laden der Todos: $e');
       setState(() {
         _isLoading = false;
       });
@@ -2873,16 +3019,23 @@ class _TodoListScreenState extends State<TodoListScreen> {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
+        print('🔐 Speichere ${_todos.length} Todos verschlüsselt...');
+
+        // 🔐 TODOS VERSCHLÜSSELN VOR DEM SPEICHERN
+        List<Map<String, dynamic>> encryptedTodos = EncryptionHelper.encryptTodos(_todos, currentUser.uid);
+
         await FirebaseFirestore.instance
             .collection('todos')
             .doc(currentUser.uid)
             .update({
-          'todoList': _todos,
+          'todoList': encryptedTodos,
+          'encrypted': true, // 🔐 MARKIERUNG FÜR VERSCHLÜSSELUNG
           'lastUpdated': FieldValue.serverTimestamp(),
         });
+        print('✅ Todos erfolgreich verschlüsselt und gespeichert');
       }
     } catch (e) {
-      print('Fehler beim Speichern der Todos: $e');
+      print('❌ Fehler beim Speichern der Todos: $e');
     }
   }
 
@@ -2899,6 +3052,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
       });
       _todoController.clear();
       _saveTodos();
+      print('🔐 Neues Todo hinzugefügt und verschlüsselt: "${todoText.length > 10 ? todoText.substring(0, 10) + "..." : todoText}"');
     } else if (todoText.length > 50) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2914,6 +3068,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
       _todos.removeWhere((todo) => todo['id'] == todoId);
     });
     _saveTodos();
+    print('🔐 Todo gelöscht und Liste neu verschlüsselt');
   }
 
   void _toggleTodo(String todoId) {
@@ -2924,6 +3079,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
       }
     });
     _saveTodos();
+    print('🔐 Todo-Status geändert und neu verschlüsselt');
   }
 
   Widget _buildTodoItem(Map<String, dynamic> todo) {
@@ -3003,15 +3159,21 @@ class _TodoListScreenState extends State<TodoListScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
+            // Header mit 🔐 Security Icon
             Container(
               padding: EdgeInsets.all(10),
-              child: Text(
-                'TODO-LISTE',
-                style: AppStyles.titleStyle(context).copyWith(
-                  fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.8,
-                ),
-                textAlign: TextAlign.center,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'TODO-LISTE',
+                    style: AppStyles.titleStyle(context).copyWith(
+                      fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.8,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(width: 8),
+                ],
               ),
             ),
 
@@ -3081,7 +3243,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
                   : _todos.isEmpty
                   ? Center(
                 child: Text(
-                  'Keine Aufgaben vorhanden\nFüge deine erste Aufgabe hinzu! 🐾',
+                  'Füge deine erste Aufgabe hinzu! 🐾',
                   style: AppStyles.labelStyle(context).copyWith(
                     fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.0,
                   ),
@@ -3161,6 +3323,8 @@ class _NotesScreenState extends State<NotesScreen> {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
+        print('🔐 Lade verschlüsselte Notizen für User: ${currentUser.uid.substring(0, 8)}...');
+
         DocumentSnapshot notesDoc = await FirebaseFirestore.instance
             .collection('notes')
             .doc(currentUser.uid)
@@ -3169,23 +3333,33 @@ class _NotesScreenState extends State<NotesScreen> {
         if (notesDoc.exists) {
           Map<String, dynamic> notesData = notesDoc.data() as Map<String, dynamic>;
           List<dynamic> notesList = notesData['noteList'] ?? [];
+          bool isEncrypted = notesData['encrypted'] ?? false;
 
           setState(() {
-            _notes = notesList.map((note) => {
-              'id': note['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-              'title': note['title'] ?? 'Ohne Titel',
-              'content': note['content'] ?? '',
-              'createdAt': note['createdAt'] ?? DateTime.now().millisecondsSinceEpoch,
-            }).toList();
+            if (isEncrypted && notesList.isNotEmpty) {
+              // 🔐 ENTSCHLÜSSELTE NOTIZEN LADEN
+              _notes = EncryptionHelper.decryptNotes(notesList, currentUser.uid);
+              print('✅ ${_notes.length} verschlüsselte Notizen entschlüsselt');
+            } else {
+              // Legacy: Unverschlüsselte Notizen (Backward Compatibility)
+              _notes = notesList.map((note) => {
+                'id': note['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                'title': note['title'] ?? 'Ohne Titel',
+                'content': note['content'] ?? '',
+                'createdAt': note['createdAt'] ?? DateTime.now().millisecondsSinceEpoch,
+              }).toList();
+              print('⚠️ ${_notes.length} unverschlüsselte Notizen geladen (Legacy)');
+            }
             _isLoading = false;
           });
         } else {
-          // Dokument existiert nicht, erstelle es
+          // Dokument existiert nicht, erstelle es VERSCHLÜSSELT
           await FirebaseFirestore.instance
               .collection('notes')
               .doc(currentUser.uid)
               .set({
             'noteList': [],
+            'encrypted': true, // 🔐 MARKIERUNG FÜR VERSCHLÜSSELUNG
             'createdAt': FieldValue.serverTimestamp(),
             'lastUpdated': FieldValue.serverTimestamp(),
           });
@@ -3193,10 +3367,11 @@ class _NotesScreenState extends State<NotesScreen> {
             _notes = [];
             _isLoading = false;
           });
+          print('✅ Neues verschlüsseltes Notes-Dokument erstellt');
         }
       }
     } catch (e) {
-      print('Fehler beim Laden der Notizen: $e');
+      print('❌ Fehler beim Laden der Notizen: $e');
       setState(() {
         _isLoading = false;
       });
@@ -3207,16 +3382,23 @@ class _NotesScreenState extends State<NotesScreen> {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
+        print('🔐 Speichere ${_notes.length} Notizen verschlüsselt...');
+
+        // 🔐 NOTIZEN VERSCHLÜSSELN VOR DEM SPEICHERN
+        List<Map<String, dynamic>> encryptedNotes = EncryptionHelper.encryptNotes(_notes, currentUser.uid);
+
         await FirebaseFirestore.instance
             .collection('notes')
             .doc(currentUser.uid)
             .update({
-          'noteList': _notes,
+          'noteList': encryptedNotes,
+          'encrypted': true, // 🔐 MARKIERUNG FÜR VERSCHLÜSSELUNG
           'lastUpdated': FieldValue.serverTimestamp(),
         });
+        print('✅ Notizen erfolgreich verschlüsselt und gespeichert');
       }
     } catch (e) {
-      print('Fehler beim Speichern der Notizen: $e');
+      print('❌ Fehler beim Speichern der Notizen: $e');
     }
   }
 
@@ -3246,6 +3428,7 @@ class _NotesScreenState extends State<NotesScreen> {
           }
           _editingNoteId = null;
         });
+        print('🔐 Notiz bearbeitet und neu verschlüsselt: "${title}"');
       } else {
         // Neue Notiz
         setState(() {
@@ -3256,6 +3439,7 @@ class _NotesScreenState extends State<NotesScreen> {
             'createdAt': DateTime.now().millisecondsSinceEpoch,
           });
         });
+        print('🔐 Neue Notiz hinzugefügt und verschlüsselt: "${title}"');
       }
 
       _notesController.clear();
@@ -3274,6 +3458,7 @@ class _NotesScreenState extends State<NotesScreen> {
         _notesController.text = note['content'] ?? '';
         _editingNoteId = noteId;
       });
+      print('🔐 Notiz zum Bearbeiten geladen: "${note['title']}"');
     }
   }
 
@@ -3287,6 +3472,7 @@ class _NotesScreenState extends State<NotesScreen> {
       }
     });
     _saveNotes();
+    print('🔐 Notiz gelöscht und Liste neu verschlüsselt');
   }
 
   void _clearEditor() {
@@ -3371,15 +3557,20 @@ class _NotesScreenState extends State<NotesScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             Container(
               padding: EdgeInsets.all(10),
-              child: Text(
-                'NOTIZEN',
-                style: AppStyles.titleStyle(context).copyWith(
-                  fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.8,
-                ),
-                textAlign: TextAlign.center,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'NOTIZEN',
+                    style: AppStyles.titleStyle(context).copyWith(
+                      fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.8,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(width: 8),
+                ],
               ),
             ),
 
@@ -3458,7 +3649,7 @@ class _NotesScreenState extends State<NotesScreen> {
                   : _notes.isEmpty
                   ? Center(
                 child: Text(
-                  'Keine Notizen vorhanden\nSchreibe deine erste Notiz! 📝',
+                  'Schreibe deine erste Notiz! 🐾',
                   style: AppStyles.labelStyle(context).copyWith(
                     fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.0,
                   ),
