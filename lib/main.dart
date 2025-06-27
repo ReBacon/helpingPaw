@@ -966,7 +966,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Navigator.of(context).pop();
         }
 
-        // 4. Manuelle Navigation zum HomeScreen
+        // 4. Notes-Dokument erstellen (NEU HINZUFÜGEN)
+        print('🔧 Erstelle Notes-Dokument für UID: $uid');
+        try {
+          await FirebaseFirestore.instance
+              .collection('notes')
+              .doc(uid)
+              .set({
+            'noteList': [],
+            'createdAt': FieldValue.serverTimestamp(),
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+          print('✅ Notes-Dokument erstellt');
+        } catch (notesError) {
+          print('⚠️ Notes-Dokument Fehler (wird ignoriert): $notesError');
+        }
+
+
+        // 5. Manuelle Navigation zum HomeScreen
         print('🚀 Navigiere manuell zum HomeScreen...');
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
@@ -1571,8 +1588,9 @@ class _MenuScreenState extends State<MenuScreen> {
                       AppWidgets.menuButton(
                         text: 'NOTIZEN',
                         onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Notizen - Coming Soon!')),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => NotesScreen()),
                           );
                         },
                         context: context,
@@ -3107,6 +3125,377 @@ class _TodoListScreenState extends State<TodoListScreen> {
   @override
   void dispose() {
     _todoController.dispose();
+    super.dispose();
+  }
+}
+//endregion
+
+//region NotesScreen
+class NotesScreen extends StatefulWidget {
+  @override
+  _NotesScreenState createState() => _NotesScreenState();
+}
+
+class _NotesScreenState extends State<NotesScreen> {
+  bool _themeLoaded = false;
+  final TextEditingController _notesController = TextEditingController();
+  List<Map<String, dynamic>> _notes = [];
+  bool _isLoading = true;
+  String? _editingNoteId; // Für Bearbeitung
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserTheme();
+    _loadNotes();
+  }
+
+  Future<void> _loadUserTheme() async {
+    await AppTheme.loadUserTheme();
+    setState(() {
+      _themeLoaded = true;
+    });
+  }
+
+  Future<void> _loadNotes() async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        DocumentSnapshot notesDoc = await FirebaseFirestore.instance
+            .collection('notes')
+            .doc(currentUser.uid)
+            .get();
+
+        if (notesDoc.exists) {
+          Map<String, dynamic> notesData = notesDoc.data() as Map<String, dynamic>;
+          List<dynamic> notesList = notesData['noteList'] ?? [];
+
+          setState(() {
+            _notes = notesList.map((note) => {
+              'id': note['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              'title': note['title'] ?? 'Ohne Titel',
+              'content': note['content'] ?? '',
+              'createdAt': note['createdAt'] ?? DateTime.now().millisecondsSinceEpoch,
+            }).toList();
+            _isLoading = false;
+          });
+        } else {
+          // Dokument existiert nicht, erstelle es
+          await FirebaseFirestore.instance
+              .collection('notes')
+              .doc(currentUser.uid)
+              .set({
+            'noteList': [],
+            'createdAt': FieldValue.serverTimestamp(),
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+          setState(() {
+            _notes = [];
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('Fehler beim Laden der Notizen: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _saveNotes() async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        await FirebaseFirestore.instance
+            .collection('notes')
+            .doc(currentUser.uid)
+            .update({
+          'noteList': _notes,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      print('Fehler beim Speichern der Notizen: $e');
+    }
+  }
+
+  String _extractTitle(String content) {
+    if (content.trim().isEmpty) return 'Ohne Titel';
+
+    String firstLine = content.split('\n')[0].trim();
+    if (firstLine.isEmpty) return 'Ohne Titel';
+
+    return firstLine.length > 20
+        ? '${firstLine.substring(0, 20)}...'
+        : firstLine;
+  }
+
+  void _saveNote() {
+    String noteContent = _notesController.text.trim();
+    if (noteContent.isNotEmpty) {
+      String title = _extractTitle(noteContent);
+
+      if (_editingNoteId != null) {
+        // Bearbeitung einer bestehenden Notiz
+        setState(() {
+          int index = _notes.indexWhere((note) => note['id'] == _editingNoteId);
+          if (index != -1) {
+            _notes[index]['title'] = title;
+            _notes[index]['content'] = noteContent;
+          }
+          _editingNoteId = null;
+        });
+      } else {
+        // Neue Notiz
+        setState(() {
+          _notes.add({
+            'id': DateTime.now().millisecondsSinceEpoch.toString(),
+            'title': title,
+            'content': noteContent,
+            'createdAt': DateTime.now().millisecondsSinceEpoch,
+          });
+        });
+      }
+
+      _notesController.clear();
+      _saveNotes();
+    }
+  }
+
+  void _loadNote(String noteId) {
+    Map<String, dynamic>? note = _notes.firstWhere(
+          (note) => note['id'] == noteId,
+      orElse: () => {},
+    );
+
+    if (note.isNotEmpty) {
+      setState(() {
+        _notesController.text = note['content'] ?? '';
+        _editingNoteId = noteId;
+      });
+    }
+  }
+
+  void _deleteNote(String noteId) {
+    setState(() {
+      _notes.removeWhere((note) => note['id'] == noteId);
+      // Falls die gerade bearbeitete Notiz gelöscht wird
+      if (_editingNoteId == noteId) {
+        _notesController.clear();
+        _editingNoteId = null;
+      }
+    });
+    _saveNotes();
+  }
+
+  void _clearEditor() {
+    setState(() {
+      _notesController.clear();
+      _editingNoteId = null;
+    });
+  }
+
+  Widget _buildNoteItem(Map<String, dynamic> note) {
+    String title = note['title'] ?? 'Ohne Titel';
+    String noteId = note['id'];
+    bool isEditing = _editingNoteId == noteId;
+
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 40, vertical: 5),
+      child: Row(
+        children: [
+          // Note Title (klickbar)
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _loadNote(noteId),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isEditing
+                      ? AppTheme.colors.mainBackground2
+                      : AppTheme.colors.mainBackground2,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  title,
+                  style: AppStyles.fieldStyle(context).copyWith(
+                    fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.0,
+                    color: isEditing
+                        ? AppTheme.colors.mainBackground
+                        : AppTheme.colors.mainTextColor,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ),
+
+          SizedBox(width: 10),
+
+          // Löschen Button
+          GestureDetector(
+            onTap: () => _deleteNote(noteId),
+            child: Container(
+              width: 45,
+              height: 45,
+              decoration: BoxDecoration(
+                color: AppTheme.colors.mainBackground2,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.remove,
+                  color: AppTheme.colors.mainTextColor,
+                  size: ResponsiveHelper.getLabelFontSize(context) * 1.5,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_themeLoaded) {
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppTheme.colors.mainBackground,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: EdgeInsets.all(10),
+              child: Text(
+                'NOTIZEN',
+                style: AppStyles.titleStyle(context).copyWith(
+                  fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.8,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
+            // Text Editor Bereich - KLEINER UND SCROLLBAR
+            Container(
+              margin: EdgeInsets.symmetric(horizontal: 40, vertical: 10),
+              height: MediaQuery.of(context).size.height * 0.12, // HALBIERT: 12% statt 24%
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Scrollbar(  // SCROLLBAR HINZUGEFÜGT
+                child: TextField(
+                  controller: _notesController,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  decoration: InputDecoration(
+                    hintText: _editingNoteId != null
+                        ? 'Notiz bearbeiten...'
+                        : 'Neue Notiz eingeben...',
+                    hintStyle: AppStyles.fieldStyle(context).copyWith(
+                      color: AppTheme.colors.mainTextColor.withOpacity(0.6),
+                      fontSize: ResponsiveHelper.getLabelFontSize(context) * 0.9,
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.all(15),
+                  ),
+                  style: AppStyles.fieldStyle(context).copyWith(
+                    color: AppTheme.colors.mainTextColor,
+                    fontSize: ResponsiveHelper.getLabelFontSize(context) * 0.9,
+                  ),
+                ),
+              ),
+            ),
+
+            // Buttons - JETZT WIE MENU BUTTONS
+            Container(
+              margin: EdgeInsets.symmetric(horizontal: 40),
+              child: Column(
+                children: [
+                  // Speichern Button - wie MenuButton
+                  AppWidgets.menuButton(
+                    text: _editingNoteId != null ? 'AKTUALISIEREN' : 'SPEICHERN',
+                    onPressed: _saveNote,
+                    context: context,
+                  ),
+
+                  // NEU Button (nur wenn bearbeitet wird) - wie MenuButton
+                  if (_editingNoteId != null) ...[
+                    SizedBox(height: 15), // GLEICHER ABSTAND WIE IM MENÜ
+                    AppWidgets.menuButton(
+                      text: 'NEU',
+                      onPressed: _clearEditor,
+                      context: context,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // Trennlinie
+            Container(
+              margin: EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+              height: 2,
+              decoration: BoxDecoration(
+                color: AppTheme.colors.mainTextColor,
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+
+            // Notizen Liste
+            Expanded(
+              child: _isLoading
+                  ? Center(child: CircularProgressIndicator())
+                  : _notes.isEmpty
+                  ? Center(
+                child: Text(
+                  'Keine Notizen vorhanden\nSchreibe deine erste Notiz! 📝',
+                  style: AppStyles.labelStyle(context).copyWith(
+                    fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.0,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              )
+                  : ListView.builder(
+                itemCount: _notes.length,
+                itemBuilder: (context, index) {
+                  // Sortiere Notizen: neueste zuerst
+                  List<Map<String, dynamic>> sortedNotes = List.from(_notes);
+                  sortedNotes.sort((a, b) {
+                    return (b['createdAt'] ?? 0).compareTo(a['createdAt'] ?? 0);
+                  });
+
+                  return _buildNoteItem(sortedNotes[index]);
+                },
+              ),
+            ),
+
+            // Zurück Button
+            Padding(
+              padding: EdgeInsets.all(10),
+              child: AppWidgets.pawButton(
+                onPressed: () => Navigator.pop(context),
+                isBackButton: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
     super.dispose();
   }
 }
