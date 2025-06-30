@@ -884,7 +884,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _register() async {
-
     // 1. Alle Felder ausgefüllt?
     if (_emailController.text.trim().isEmpty ||
         _passwordController.text.isEmpty ||
@@ -975,11 +974,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // 4. Passwörter stimmen überein? (dein bereits vorhandener Code)
-    if (_passwordController.text != _confirmPasswordController.text) {
-      // ... dein vorhandener Code ...
-    }
-
+    // 4. Passwörter stimmen überein?
     if (_passwordController.text != _confirmPasswordController.text) {
       showDialog(
         context: context,
@@ -1040,8 +1035,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       String? uid;
 
       try {
-        userCredential =
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
@@ -1091,12 +1085,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         });
         print('✅ Verschlüsseltes Todo-Dokument erstellt');
 
-        // Loading Dialog schließen
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
-
-        // 4. Notes-Dokument erstellen (NEU HINZUFÜGEN)
+        // 4. Notes-Dokument erstellen
         print('🔧 Erstelle verschlüsseltes Notes-Dokument für UID: $uid');
         try {
           await FirebaseFirestore.instance
@@ -1113,14 +1102,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
           print('⚠️ Notes-Dokument Fehler (wird ignoriert): $notesError');
         }
 
+        // Loading Dialog schließen
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
 
-        // 5. Manuelle Navigation zum HomeScreen
-        print('🚀 Navigiere manuell zum HomeScreen...');
+        // 5. Navigation zum HomeScreen mit Welcome Dialog
+        print('🚀 Navigiere zum HomeScreen mit Welcome Dialog...');
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (context) => HomeScreen()),
                 (route) => false,
-          );
+          ).then((_) {
+            // Welcome Dialog nach Navigation anzeigen
+            Future.delayed(Duration(milliseconds: 500), () {
+              if (mounted) {
+                showWelcomeDialog(context);
+              }
+            });
+          });
         }
         print('✅ Registrierung erfolgreich abgeschlossen!');
       } else {
@@ -1136,7 +1136,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         } catch (_) {}
       }
 
-      // Statt setState mit _errorMessage:
+      // Fehler-Dialog anzeigen
       if (mounted) {
         showDialog(
           context: context,
@@ -1581,7 +1581,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Positioned(
             top: 50,
             right: 20,
-            child: AppWidgets.pawButton(
+            child: AppWidgets.pawPlusButton(
               onPressed: () async {
                 await Navigator.push(
                   context,
@@ -1767,7 +1767,7 @@ class _MenuScreenState extends State<MenuScreen> {
             // Paw Footer
             Padding(
               padding: EdgeInsets.all(10),
-              child: AppWidgets.pawButton(
+              child: AppWidgets.pawBackButton(
                 onPressed: () => Navigator.pop(context),
                 isBackButton: true,
               ),
@@ -1843,7 +1843,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             .get();
 
         if (userDoc.exists) {
-          Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+          Map<String, dynamic> userData = userDoc.data() as Map<String,
+              dynamic>;
           setState(() {
             _selectedTheme = userData['themeID'] ?? 'turquoise';
             _notificationsEnabled = userData['notificationsEnabled'] ?? true;
@@ -1957,7 +1958,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildSettingSwitch(String title, bool value, Function(bool) onChanged) {
+  Widget _buildSettingSwitch(String title, bool value,
+      Function(bool) onChanged) {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: 40, vertical: 10),
       child: Row(
@@ -2038,7 +2040,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildSettingSwitch(
                       'BENACHRICHTIGUNG',
                       _notificationsEnabled,
-                          (value) => _updateUserSetting('notificationsEnabled', value),
+                          (value) =>
+                          _updateUserSetting('notificationsEnabled', value),
                     ),
                     _buildSettingSwitch(
                       'TON',
@@ -2046,6 +2049,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           (value) => _updateUserSetting('soundEnabled', value),
                     ),
                     SizedBox(height: 30),
+
+                    // INFORMATIONEN Button - NEU HINZUGEFÜGT
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 40),
+                      child: AppWidgets.menuButton(
+                        text: 'INFORMATIONEN',
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => InfoScreen()),
+                          );
+                        },
+                        context: context,
+                      ),
+                    ),
+                    SizedBox(height: 15), // Abstand zwischen den Buttons
+
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 40),
                       child: AppWidgets.menuButton(
@@ -2054,7 +2075,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           // 🔐 Verschlüsselung cleanup beim Logout
                           EncryptionHelper.dispose();
                           await FirebaseAuth.instance.signOut();
-                          Navigator.of(context).popUntil((route) => route.isFirst);
+                          Navigator.of(context).popUntil((route) =>
+                          route.isFirst);
                         },
                         context: context,
                       ),
@@ -2076,7 +2098,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             Padding(
               padding: EdgeInsets.all(10),
-              child: AppWidgets.pawButton(
+              child: AppWidgets.pawBackButton(
                 onPressed: () => Navigator.pop(context),
                 isBackButton: true,
               ),
@@ -2087,7 +2109,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
-//#endregion
+//#endregionr
 
 //#region TimerScreen
 class TimerScreen extends StatefulWidget {
@@ -2404,7 +2426,20 @@ class _TimerScreenState extends State<TimerScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Zeit-Anzeige (klickbar) - HIER IST DIE WICHTIGE ÄNDERUNG
+                    // "ZEIT EINSTELLEN" Text - NEU HINZUGEFÜGT
+                    Container(
+                      width: ResponsiveHelper.getMaxWidth(context) - 40,
+                      margin: EdgeInsets.only(bottom: 5),
+                      child: Text(
+                        'ZEIT EINSTELLEN',
+                        style: AppStyles.labelStyle(context).copyWith(
+                          fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.1,
+                        ),
+                        textAlign: TextAlign.left, // Linksbündig wie beim Pomodoro
+                      ),
+                    ),
+
+                    // Zeit-Anzeige (klickbar)
                     GestureDetector(
                       onTap: _showTimeSetDialog,
                       child: Container(
@@ -2418,23 +2453,23 @@ class _TimerScreenState extends State<TimerScreen> {
                           child: FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 20), // Abstand links und rechts
+                              padding: EdgeInsets.symmetric(horizontal: 20),
                               child: Text(
                                 GlobalTimer.getDisplayTimerText(),
                                 style: GlobalTimer.isFinished
-                                    ? AppStyles.buttonStyle(context).copyWith(  // Button-Style für "Timer abgelaufen"
-                                  fontSize: ResponsiveHelper.getTitleFontSize(context) * 0.6,  // ← Noch kleiner (0.6 statt 0.8)
+                                    ? AppStyles.buttonStyle(context).copyWith(
+                                  fontSize: ResponsiveHelper.getTitleFontSize(context) * 0.6,
                                   color: AppTheme.colors.mainTextColor,
                                   fontWeight: FontWeight.normal,
                                 )
-                                    : AppStyles.fieldStyle(context).copyWith(  // Normal-Style für Timer
+                                    : AppStyles.fieldStyle(context).copyWith(
                                   fontSize: ResponsiveHelper.getTitleFontSize(context) * 1.2,
                                   color: AppTheme.colors.mainTextColor,
                                   fontWeight: FontWeight.normal,
                                 ),
                                 textAlign: TextAlign.center,
-                                maxLines: 3, // Erlaubt Zeilenumbruch auf 2 Zeilen
-                                overflow: TextOverflow.visible, // Text wird umgebrochen statt abgeschnitten
+                                maxLines: 3,
+                                overflow: TextOverflow.visible,
                               ),
                             ),
                           ),
@@ -2491,7 +2526,7 @@ class _TimerScreenState extends State<TimerScreen> {
             // Zurück Button
             Padding(
               padding: EdgeInsets.all(10),
-              child: AppWidgets.pawButton(
+              child: AppWidgets.pawBackButton(
                 onPressed: () => Navigator.pop(context),
                 isBackButton: true,
               ),
@@ -2505,7 +2540,6 @@ class _TimerScreenState extends State<TimerScreen> {
   @override
   void dispose() {
     _repeatTimer?.cancel();
-    // NICHT GlobalTimer.dispose() - da er global bleiben soll!
     super.dispose();
   }
 }
@@ -2911,7 +2945,7 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
 
             Padding(
               padding: EdgeInsets.all(10),
-              child: AppWidgets.pawButton(
+              child: AppWidgets.pawBackButton(
                 onPressed: () => Navigator.pop(context),
                 isBackButton: true,
               ),
@@ -3273,7 +3307,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
             // Zurück Button
             Padding(
               padding: EdgeInsets.all(10),
-              child: AppWidgets.pawButton(
+              child: AppWidgets.pawBackButton(
                 onPressed: () => Navigator.pop(context),
                 isBackButton: true,
               ),
@@ -3673,7 +3707,7 @@ class _NotesScreenState extends State<NotesScreen> {
             // Zurück Button
             Padding(
               padding: EdgeInsets.all(10),
-              child: AppWidgets.pawButton(
+              child: AppWidgets.pawBackButton(
                 onPressed: () => Navigator.pop(context),
                 isBackButton: true,
               ),
@@ -3691,3 +3725,296 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 }
 //endregion
+
+//#region InfoScreen
+class InfoScreen extends StatefulWidget {
+  final bool showAsWelcome; // Für Welcome-Dialog nach Registrierung
+
+  const InfoScreen({Key? key, this.showAsWelcome = false}) : super(key: key);
+
+  @override
+  _InfoScreenState createState() => _InfoScreenState();
+}
+
+class _InfoScreenState extends State<InfoScreen> {
+  bool _themeLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserTheme();
+  }
+
+  Future<void> _loadUserTheme() async {
+    await AppTheme.loadUserTheme();
+    setState(() {
+      _themeLoaded = true;
+    });
+  }
+
+  Widget _buildInfoSection(String title, String content, {Widget? image}) {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 40, vertical: 10),
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.colors.mainBackground2,
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (image != null) ...[
+            Center(child: image),
+            SizedBox(height: 15),
+          ],
+          Text(
+            title,
+            style: AppStyles.labelStyle(context).copyWith(
+              fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.2,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: 10),
+          Text(
+            content,
+            style: AppStyles.fieldStyle(context).copyWith(
+              fontSize: ResponsiveHelper.getFieldFontSize(context) * 0.9,
+              height: 1.4, // Zeilenhöhe für bessere Lesbarkeit
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_themeLoaded) {
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // Als Welcome Dialog nach Registrierung
+    if (widget.showAsWelcome) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+            maxWidth: ResponsiveHelper.getMaxWidth(context),
+          ),
+          decoration: BoxDecoration(
+            color: AppTheme.colors.mainBackground,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'WILLKOMMEN BEI helpingPaw! 🐾',
+                  style: AppStyles.titleStyle(context).copyWith(
+                    fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+
+              // Scrollbarer Inhalt
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _buildInfoSection(
+                        'DEINE PERSÖNLICHEN HELFENDEN PFOTEN',
+                        'Mimi und Mr. Plum sind deine treuen Begleiter in der App!\n\n'
+                            'Mimi behält immer deine laufende Timer im Auge, damit auch ja alles richtig abläuft.\n\n'
+                            'Mr. Plum meldet sich, wenn deine Timer abgelaufen sind, deine Zeitphasen wechseln oder wenn es sonst etwas zu sagen gibt.',
+                        image: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            Column(
+                              children: [
+                                Image.asset('assets/images/plumSit.png', width: 80, height: 80),
+                                Text('Mr. Plum', style: AppStyles.fieldStyle(context)),
+                              ],
+                            ),
+                            Column(
+                              children: [
+                                Transform.scale(
+                                  scaleX: -1, // Spiegelt horizontal
+                                  child: Image.asset('assets/images/mimiSit.png', width: 80, height: 80),
+                                ),
+                                Text('Mimi', style: AppStyles.fieldStyle(context)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      _buildInfoSection(
+                        'WAS IST EIN POMODORO-TIMER?',
+                        'Die Pomodoro-Technik ist eine bewährte Methode für produktives Arbeiten:\n\n'
+                            '• Arbeite 25 Minuten konzentriert\n'
+                            '• Mache dann 5 Minuten Pause\n'
+                            '• Nach 4 Arbeitsblöcken: 15-30 Min. lange Pause\n\n'
+                            'Diese Technik hilft dir dabei, fokussiert zu bleiben und Überforderung zu vermeiden!\n'
+                            'Du kannst dir die Zeiten allerdings gerne einstellen wie du sie brauchst.',
+                      ),
+
+                      _buildInfoSection(
+                        'AKTUELLE INFOS',
+                        '📱 Die App befindet sich noch in der Entwicklung\n\n'
+                            '🔜 Kommende Features:\n'
+                            '• Erinnerungen\n'
+                            '• Kalender-Integration\n'
+                            '• Weitere Anpassungsmöglichkeiten\n\n'
+                            '🔐 Deine Daten sind verschlüsselt und sicher!\n\n'
+                            'Vielen Dank fürs Testen! 🐾',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Schließen Button
+              Padding(
+                padding: EdgeInsets.all(20),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: AppStyles.getElevatedButtonStyle(),
+                    child: Text(
+                      'LOS GEHT\'S! 🚀',
+                      style: AppStyles.buttonStyle(context),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Als normaler Screen
+    return Scaffold(
+      backgroundColor: AppTheme.colors.mainBackground,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: EdgeInsets.all(10),
+              child: Text(
+                'INFORMATIONEN',
+                style: AppStyles.titleStyle(context).copyWith(
+                  fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.8,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
+            // Scrollbarer Inhalt
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    SizedBox(height: 10),
+
+                    _buildInfoSection(
+                      'DEINE PERSÖNLICHEN HELFENDEN PFOTEN',
+                      'Mimi und Mr. Plum sind deine treuen Begleiter in der App!\n\n'
+                          'Mimi behält immer deine laufende Timer im Auge, damit auch ja alles richtig abläuft.\n\n'
+                          'Mr. Plum meldet sich, wenn deine Timer abgelaufen sind, deine Zeitphasen wechseln oder wenn es sonst etwas zu sagen gibt.',
+                      image: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Column(
+                            children: [
+                              Image.asset('assets/images/plumSit.png', width: 120, height: 120),
+                              Text('Mr. Plum', style: AppStyles.fieldStyle(context)),
+                            ],
+                          ),
+                          Column(
+                            children: [
+                              Transform.scale(
+                                scaleX: -1, // Spiegelt horizontal
+                                child: Image.asset('assets/images/mimiSit.png', width: 120, height: 120),
+                              ),
+                              Text('Mimi', style: AppStyles.fieldStyle(context)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    _buildInfoSection(
+                      'WAS IST EIN POMODORO-TIMER?',
+                      'Die Pomodoro-Technik ist eine bewährte Methode für produktives Arbeiten:\n\n'
+                          '• Arbeite 25 Minuten konzentriert\n'
+                          '• Mache dann 5 Minuten Pause\n'
+                          '• Nach 4 Arbeitsblöcken: 15-30 Min. lange Pause\n\n'
+                          'Diese Technik hilft dir dabei, fokussiert zu bleiben und Überforderung zu vermeiden!\n'
+                          'Du kannst dir die Zeiten allerdings gerne einstellen wie du sie brauchst.',
+                    ),
+
+                    _buildInfoSection(
+                      'FEATURES DER APP',
+                      '⏰ Timer & Pomodoro-Timer\n'
+                          '📝 Verschlüsselte Todo-Listen\n'
+                          '📄 Sichere Notizen\n'
+                          '🎨 6 verschiedene Themes\n'
+                          '🔔 Benachrichtigungen\n'
+                          '📱 Responsive Design\n\n'
+                          'Alle deine Daten werden lokal verschlüsselt gespeichert!',
+                    ),
+
+                    _buildInfoSection(
+                      'AKTUELLE INFOS & UPDATES',
+                      '📱 Die App befindet sich noch in der Entwicklung\n\n'
+                          '🔜 Kommende Features:\n'
+                          '• Erinnerungen\n'
+                          '• Kalender-Integration\n'
+                          '• Weitere Anpassungsmöglichkeiten\n'
+                          '• Statistiken & Fortschrittsverfolgung\n\n'
+                          '🔐 Deine Privatsphäre ist uns wichtig!\n\n'
+                          'Vielen Dank fürs Nutzen von helpingPaw! 🐾',
+                    ),
+
+                    SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            ),
+
+            // Zurück Button
+            Padding(
+              padding: EdgeInsets.all(10),
+              child: AppWidgets.pawBackButton(
+                onPressed: () => Navigator.pop(context),
+                isBackButton: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Hilfsfunktion für Welcome Dialog
+void showWelcomeDialog(BuildContext context) {
+  showDialog(
+    context: context,
+    barrierDismissible: false, // User muss explizit schließen
+    builder: (BuildContext context) {
+      return InfoScreen(showAsWelcome: true);
+    },
+  );
+}
+//#endregion

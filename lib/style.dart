@@ -346,7 +346,7 @@ class AppWidgets {
   /// Paw Button - für Menu-Navigation und Back-Buttons
   /// [onPressed]: Callback-Funktion wenn Button gedrückt wird
   /// [isBackButton]: Optional - wenn true, wird Icon gespiegelt für Back-Button-Look
-  static Widget pawButton({
+  static Widget pawPlusButton({
     required VoidCallback onPressed,
     bool isBackButton = false,
   }) {
@@ -356,7 +356,25 @@ class AppWidgets {
         width: 70,
         height: 70,
         child: Image.asset(
-          'assets/images/paw.png',
+          'assets/images/pawPlus.png',
+          color: AppTheme.colors.mainTextColor,
+          fit: BoxFit.contain,
+        ),
+      ),
+    );
+  }
+
+  static Widget pawBackButton({
+    required VoidCallback onPressed,
+    bool isBackButton = false,
+  }) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: 70,
+        height: 70,
+        child: Image.asset(
+          'assets/images/pawBack.png',
           color: AppTheme.colors.mainTextColor,
           fit: BoxFit.contain,
         ),

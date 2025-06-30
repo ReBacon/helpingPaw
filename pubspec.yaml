@@ -27,6 +27,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
@@ -39,3 +40,11 @@ flutter:
     - family: Jersey
       fonts:
         - asset: assets/fonts/Jersey15-Regular.ttf
+
+
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/pawlogo.png"
+  background_color: "0xFFC7F0EC"
