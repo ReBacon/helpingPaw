@@ -713,7 +713,14 @@ class _LoginScreenState extends State<LoginScreen> {
       if (userCredential.user != null) {
         // Theme laden nach erfolgreichem Login
         await AppTheme.loadUserTheme();
-        setState(() {});
+
+        // EXPLIZITE Navigation zum HomeScreen
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => HomeScreen()),
+                (route) => false,
+          );
+        }
       }
     } catch (e) {
       print('⚠️ Login Fehler: $e');
@@ -724,7 +731,14 @@ class _LoginScreenState extends State<LoginScreen> {
         print('✅ User ist trotz Error eingeloggt - UID: ${currentUser.uid}');
         // Theme laden nach erfolgreichem Login
         await AppTheme.loadUserTheme();
-        setState(() {});
+
+        // EXPLIZITE Navigation zum HomeScreen
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => HomeScreen()),
+                (route) => false,
+          );
+        }
       } else {
         // 4. Echter Login-Fehler (E-Mail/Passwort falsch)
         showDialog(
