@@ -1107,19 +1107,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Navigator.of(context).pop();
         }
 
-        // 5. Navigation zum HomeScreen mit Welcome Dialog
-        print('🚀 Navigiere zum HomeScreen mit Welcome Dialog...');
+// 5. Welcome Dialog ZUERST zeigen, dann zum HomeScreen
+        print('🚀 Zeige Welcome Dialog...');
         if (mounted) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => HomeScreen()),
-                (route) => false,
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (BuildContext dialogContext) {
+              return InfoScreen(showAsWelcome: true);
+            },
           ).then((_) {
-            // Welcome Dialog nach Navigation anzeigen
-            Future.delayed(Duration(milliseconds: 500), () {
-              if (mounted) {
-                showWelcomeDialog(context);
-              }
-            });
+            // Nach Dialog-Schließung zum HomeScreen
+            if (mounted) {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => HomeScreen()),
+                    (route) => false,
+              );
+            }
           });
         }
         print('✅ Registrierung erfolgreich abgeschlossen!');
@@ -2072,11 +2076,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: AppWidgets.menuButton(
                         text: 'LOGOUT',
                         onPressed: () async {
-                          // 🔐 Verschlüsselung cleanup beim Logout
                           EncryptionHelper.dispose();
                           await FirebaseAuth.instance.signOut();
-                          Navigator.of(context).popUntil((route) =>
-                          route.isFirst);
+
+                          // RICHTIGE Navigation zum LoginScreen
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(builder: (context) => LoginScreen()),
+                                (route) => false, // ← Das ist der Schlüssel!
+                          );
                         },
                         context: context,
                       ),
