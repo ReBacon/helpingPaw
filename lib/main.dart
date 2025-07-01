@@ -480,7 +480,7 @@ class GlobalPomodoroTimer {
           // Alle Zyklen abgeschlossen - Timer stoppen und als finished markieren
           _timer?.cancel();
           _isRunning = false;
-          _isFinished = true;  // ← DIESE ZEILE FEHLTE!
+          _isFinished = true;
           _allCyclesCompleted = true;
           _onTimerFinished?.call();
           return;
@@ -849,7 +849,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-              // KEINE rote Fehlerbox mehr! 🎉
             ],
           ),
         ),
@@ -1121,7 +1120,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Navigator.of(context).pop();
         }
 
-// 5. Welcome Dialog ZUERST zeigen, dann zum HomeScreen
+      // 5. Welcome Dialog ZUERST zeigen, dann zum HomeScreen
         print('🚀 Zeige Welcome Dialog...');
         if (mounted) {
           showDialog(
@@ -1481,7 +1480,7 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       child: Container(
         width: ResponsiveHelper.getMaxWidth(context) - 40,
-        height: ResponsiveHelper.getMenuButtonHeight(context) * 2.5, // GLEICHE HÖHE WIE TIMER
+        height: ResponsiveHelper.getMenuButtonHeight(context) * 2.5,
         decoration: BoxDecoration(
           color: AppTheme.colors.mainBackground2,
           borderRadius: BorderRadius.circular(10),
@@ -1496,13 +1495,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Text(
                     phaseText,
                     style: AppStyles.labelStyle(context).copyWith(
-                      fontSize: ResponsiveHelper.getLabelFontSize(context) * 0.6, // Kleinere Phase-Anzeige
+                      fontSize: ResponsiveHelper.getLabelFontSize(context) * 0.6,
                       color: AppTheme.colors.mainTextColor,
                     ),
                     textAlign: TextAlign.center,
                   ),
                 ),
-                SizedBox(height: 4), // Weniger Abstand
+                SizedBox(height: 4),
               ],
 
               FittedBox(
@@ -1518,7 +1517,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontWeight: FontWeight.normal,
                     )
                         : AppStyles.fieldStyle(context).copyWith(
-                      fontSize: ResponsiveHelper.getTitleFontSize(context) * 1.2, // GLEICHE GRÖSSE WIE TIMER
+                      fontSize: ResponsiveHelper.getTitleFontSize(context) * 1.2,
                       color: AppTheme.colors.mainTextColor,
                       fontWeight: FontWeight.normal,
                     ),
@@ -2083,7 +2082,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         context: context,
                       ),
                     ),
-                    SizedBox(height: 15), // Abstand zwischen den Buttons
+                    SizedBox(height: 15),
 
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 40),
@@ -2096,7 +2095,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           // RICHTIGE Navigation zum LoginScreen
                           Navigator.of(context).pushAndRemoveUntil(
                             MaterialPageRoute(builder: (context) => LoginScreen()),
-                                (route) => false, // ← Das ist der Schlüssel!
+                                (route) => false,
                           );
                         },
                         context: context,
@@ -2447,7 +2446,6 @@ class _TimerScreenState extends State<TimerScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // "ZEIT EINSTELLEN" Text - NEU HINZUGEFÜGT
                     Container(
                       width: ResponsiveHelper.getMaxWidth(context) - 40,
                       margin: EdgeInsets.only(bottom: 5),
@@ -2456,7 +2454,7 @@ class _TimerScreenState extends State<TimerScreen> {
                         style: AppStyles.labelStyle(context).copyWith(
                           fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.1,
                         ),
-                        textAlign: TextAlign.left, // Linksbündig wie beim Pomodoro
+                        textAlign: TextAlign.left,
                       ),
                     ),
 
@@ -2622,25 +2620,24 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
     _repeatTimer = null;
   }
 
-  // Vereinfachte Eingabe mit Button-Breite und mehr Höhe
   Widget _buildTimeInput(String label, int currentValue, VoidCallback onTap) {
     return Container(
-      width: ResponsiveHelper.getMaxWidth(context) - 40, // GLEICHE BREITE WIE BUTTONS
-      margin: EdgeInsets.symmetric(vertical: 5), // WENIGER ABSTAND
+      width: ResponsiveHelper.getMaxWidth(context) - 40,
+      margin: EdgeInsets.symmetric(vertical: 5),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start, // LINKSBÜNDIG
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
             style: AppStyles.labelStyle(context).copyWith(
-              fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.1, // GRÖSSERE ÜBERSCHRIFT
+              fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.1,
             ),
           ),
-          SizedBox(height: 5), // WENIGER ABSTAND
+          SizedBox(height: 5),
           GestureDetector(
             onTap: onTap,
             child: Container(
-              height: ResponsiveHelper.getMenuButtonHeight(context) * 1.3, // HÖHER
+              height: ResponsiveHelper.getMenuButtonHeight(context) * 1.3,
               decoration: BoxDecoration(
                 color: AppTheme.colors.mainBackground2,
                 borderRadius: BorderRadius.circular(10),
@@ -2649,7 +2646,7 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
                 child: Text(
                   '${currentValue.toString().padLeft(2, '0')}:00',
                   style: AppStyles.fieldStyle(context).copyWith(
-                    fontSize: ResponsiveHelper.getTitleFontSize(context) * 1.0, // GRÖSSERE SCHRIFT
+                    fontSize: ResponsiveHelper.getTitleFontSize(context) * 1.0,
                   ),
                 ),
               ),
@@ -2662,20 +2659,20 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
 
   Widget _buildCounterInput(String label, int currentValue, Function(int) onChanged, {int min = 1, int max = 10}) {
     return Container(
-      width: ResponsiveHelper.getMaxWidth(context) - 40, // GLEICHE BREITE WIE BUTTONS
-      margin: EdgeInsets.symmetric(vertical: 5), // WENIGER ABSTAND
+      width: ResponsiveHelper.getMaxWidth(context) - 40,
+      margin: EdgeInsets.symmetric(vertical: 5),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start, // LINKSBÜNDIG
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
             style: AppStyles.labelStyle(context).copyWith(
-              fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.1, // GRÖSSERE ÜBERSCHRIFT
+              fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.1,
             ),
           ),
-          SizedBox(height: 5), // WENIGER ABSTAND
+          SizedBox(height: 5),
           Container(
-            height: ResponsiveHelper.getMenuButtonHeight(context) * 1.3, // HÖHER
+            height: ResponsiveHelper.getMenuButtonHeight(context) * 1.3,
             decoration: BoxDecoration(
               color: AppTheme.colors.mainBackground2,
               borderRadius: BorderRadius.circular(10),
@@ -2694,14 +2691,14 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
                     child: Icon(
                       Icons.remove,
                       color: currentValue > min ? AppTheme.colors.mainTextColor : AppTheme.colors.mainTextColor.withOpacity(0.3),
-                      size: ResponsiveHelper.getLabelFontSize(context) * 1.2, // GRÖSSERE ICONS
+                      size: ResponsiveHelper.getLabelFontSize(context) * 1.2,
                     ),
                   ),
                 ),
                 Text(
-                  '${currentValue}', // OHNE x
+                  '${currentValue}',
                   style: AppStyles.fieldStyle(context).copyWith(
-                    fontSize: ResponsiveHelper.getTitleFontSize(context) * 1.0, // GRÖSSERE SCHRIFT
+                    fontSize: ResponsiveHelper.getTitleFontSize(context) * 1.0,
                   ),
                 ),
                 GestureDetector(
@@ -2715,7 +2712,7 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
                     child: Icon(
                       Icons.add,
                       color: currentValue < max ? AppTheme.colors.mainTextColor : AppTheme.colors.mainTextColor.withOpacity(0.3),
-                      size: ResponsiveHelper.getLabelFontSize(context) * 1.2, // GRÖSSERE ICONS
+                      size: ResponsiveHelper.getLabelFontSize(context) * 1.2,
                     ),
                   ),
                 ),
@@ -2859,7 +2856,7 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
             Expanded(
               child: SingleChildScrollView(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 40), // GLEICHE PADDING WIE TIMER
+                  padding: EdgeInsets.symmetric(horizontal: 40),
                   child: Column(
                     children: [
                       SizedBox(height: 10),
@@ -2876,7 +2873,7 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
                         ),
                       ),
 
-                      SizedBox(height: 10), // WENIGER ABSTAND
+                      SizedBox(height: 10),
 
                       _buildCounterInput(
                         'DURCHGÄNGE',
@@ -2888,7 +2885,7 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
                         max: 10,
                       ),
 
-                      SizedBox(height: 10), // WENIGER ABSTAND
+                      SizedBox(height: 10),
 
                       _buildTimeInput(
                         'KURZE PAUSE',
@@ -2902,7 +2899,7 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
                         ),
                       ),
 
-                      SizedBox(height: 10), // WENIGER ABSTAND
+                      SizedBox(height: 10),
 
                       _buildTimeInput(
                         'LANGE PAUSE',
@@ -2916,7 +2913,7 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
                         ),
                       ),
 
-                      SizedBox(height: 10), // WENIGER ABSTAND
+                      SizedBox(height: 10),
 
                       _buildCounterInput(
                         'LANGE PAUSE NACH',
@@ -2928,9 +2925,8 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
                         max: 8,
                       ),
 
-                      SizedBox(height: 25), // WENIGER ABSTAND VOR BUTTONS
+                      SizedBox(height: 25),
 
-                      // BUTTONS GENAU WIE BEIM TIMER
                       AppWidgets.menuButton(
                         text: GlobalPomodoroTimer.isRunning ? 'PAUSE' : 'START',
                         onPressed: () {
@@ -3160,7 +3156,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
                   style: AppStyles.fieldStyle(context).copyWith(
                     fontSize: ResponsiveHelper.getLabelFontSize(context) * 1.0,
                     color: isCompleted
-                        ? AppTheme.colors.mainBackground  // Gleiche Farbe wie Hintergrund
+                        ? AppTheme.colors.mainBackground
                         : AppTheme.colors.mainTextColor,
                     decoration: isCompleted
                         ? TextDecoration.lineThrough
@@ -3255,7 +3251,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
                           ),
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-                          counterText: '', // Versteckt den Zeichenzähler
+                          counterText: '',
                         ),
                         style: AppStyles.fieldStyle(context).copyWith(
                           color: AppTheme.colors.mainTextColor,
@@ -3632,12 +3628,12 @@ class _NotesScreenState extends State<NotesScreen> {
             // Text Editor Bereich - KLEINER UND SCROLLBAR
             Container(
               margin: EdgeInsets.symmetric(horizontal: 40, vertical: 10),
-              height: MediaQuery.of(context).size.height * 0.12, // HALBIERT: 12% statt 24%
+              height: MediaQuery.of(context).size.height * 0.12,
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.9),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Scrollbar(  // SCROLLBAR HINZUGEFÜGT
+              child: Scrollbar(
                 child: TextField(
                   controller: _notesController,
                   maxLines: null,
@@ -3662,21 +3658,21 @@ class _NotesScreenState extends State<NotesScreen> {
               ),
             ),
 
-            // Buttons - JETZT WIE MENU BUTTONS
+
             Container(
               margin: EdgeInsets.symmetric(horizontal: 40),
               child: Column(
                 children: [
-                  // Speichern Button - wie MenuButton
+                  // Speichern Button
                   AppWidgets.menuButton(
                     text: _editingNoteId != null ? 'AKTUALISIEREN' : 'SPEICHERN',
                     onPressed: _saveNote,
                     context: context,
                   ),
 
-                  // NEU Button (nur wenn bearbeitet wird) - wie MenuButton
+                  // NEU Button (nur wenn bearbeitet wird)
                   if (_editingNoteId != null) ...[
-                    SizedBox(height: 15), // GLEICHER ABSTAND WIE IM MENÜ
+                    SizedBox(height: 15),
                     AppWidgets.menuButton(
                       text: 'NEU',
                       onPressed: _clearEditor,
@@ -3800,7 +3796,7 @@ class _InfoScreenState extends State<InfoScreen> {
             content,
             style: AppStyles.fieldStyle(context).copyWith(
               fontSize: ResponsiveHelper.getFieldFontSize(context) * 0.9,
-              height: 1.4, // Zeilenhöhe für bessere Lesbarkeit
+              height: 1.4,
             ),
           ),
         ],
@@ -3866,7 +3862,7 @@ class _InfoScreenState extends State<InfoScreen> {
                             Column(
                               children: [
                                 Transform.scale(
-                                  scaleX: -1, // Spiegelt horizontal
+                                  scaleX: -1,
                                   child: Image.asset('assets/images/mimiSit.png', width: 80, height: 80),
                                 ),
                                 Text('Mimi', style: AppStyles.fieldStyle(context)),
@@ -3964,7 +3960,7 @@ class _InfoScreenState extends State<InfoScreen> {
                           Column(
                             children: [
                               Transform.scale(
-                                scaleX: -1, // Spiegelt horizontal
+                                scaleX: -1,
                                 child: Image.asset('assets/images/mimiSit.png', width: 120, height: 120),
                               ),
                               Text('Mimi', style: AppStyles.fieldStyle(context)),
