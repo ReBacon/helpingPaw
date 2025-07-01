@@ -2,7 +2,10 @@
 
 A productivity app with heart - featuring two adorable cat companions that help you stay focused and organized!
 
-![helpingPaw Logo](assets/images/paw.png)
+
+<div align="center">
+  <img src="assets/images/paw.png" alt="helpingPaw Logo" width="100" height="100">
+</div>
 
 ## 📱 What is helpingPaw?
 
