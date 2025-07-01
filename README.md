@@ -134,12 +134,6 @@ class ResponsiveHelper {
 }
 ```
 
-## 📱 Screenshots
-
-| Home Screen | Timer | Pomodoro | Todo List |
-|-------------|-------|----------|-----------|
-| ![Home](screenshots/home.png) | ![Timer](screenshots/timer.png) | ![Pomodoro](screenshots/pomodoro.png) | ![Todo](screenshots/todo.png) |
-
 ## 🎯 Upcoming Features
 
 - 📅 Calendar Integration
@@ -169,12 +163,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - **Mimi & Mr. Plum**: The real cats that inspired the app mascots
+- **My Trainers**: For never giving up on me and motivating me to improve continuously
+- **My Partner**: For always pointing out details and helping me find solutions ❤️
 - **Flutter Team**: For the amazing framework
 - **Firebase**: For reliable backend services
 - **Claude AI**: For being an excellent coding partner
 
 ---
 
-**Made with ❤️ and 🐾 by [Your Name]**
+**Made with ❤️ and 🐾 by Rebecca**
 
 *"Productivity doesn't have to be boring - let Mimi and Mr. Plum make your work day a little brighter!"*
